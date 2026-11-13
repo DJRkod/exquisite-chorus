@@ -1,0 +1,9 @@
+#!/bin/sh
+# raburt3's LLM chat log (course LLM policy): regenerate it and include it in
+# every commit. Only active where `git config core.hooksPath .githooks` is set,
+# so it runs on raburt3's machine and not on teammates'.
+python scripts/export_llm_logs.py || {
+  echo "pre-commit: llm_logs_raburt3.csv export failed; commit blocked." >&2
+  exit 1
+}
+git add llm_logs_raburt3.csv

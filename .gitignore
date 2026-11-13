@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+.env
+
+# Personal Claude Code settings (raburt3's LLM-logging hooks live here)
+.claude/settings.local.json
+
+# raburt3's LLM log tooling (course LLM policy)
+.llm_log_redact.txt
+llm_logs_raburt3.csv.*.tmp
+__pycache__/
+
+# Playwright MCP snapshots
+.playwright-mcp/
