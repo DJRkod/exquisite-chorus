@@ -51,3 +51,58 @@ body {
 .wake-banner p {
   margin: 1rem 0;
 }
+
+.recordings-page section {
+  margin: 1.5rem 0;
+}
+
+.capture-controls,
+.take,
+.together {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.file-pick {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-pick input {
+  max-width: 100%;
+}
+
+.take audio {
+  max-width: 100%;
+}
+
+.reauth {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  max-width: 24rem;
+}
+
+.recording-list {
+  list-style: none;
+  padding: 0;
+}
+
+.recording-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.recording-list .owner {
+  font-weight: bold;
+  min-width: 10rem;
+}

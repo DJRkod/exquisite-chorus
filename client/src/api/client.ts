@@ -1,7 +1,17 @@
 // Typed fetch wrapper for the same-origin API (KTD2). Every response body is
 // the server's { message, data } envelope; success resolves to data, failure
 // rejects with an ApiError.
-import type { ApiEnvelope, PublicUser, SignInRequest, SignUpRequest } from '@exquisite-chorus/shared'
+import type {
+  ApiEnvelope,
+  ConfirmUploadRequest,
+  CreateUploadRequest,
+  CreateUploadResponse,
+  PlaybackUrlResponse,
+  PublicUser,
+  RecordingDto,
+  SignInRequest,
+  SignUpRequest,
+} from '@exquisite-chorus/shared'
 
 export const DEFAULT_TIMEOUT_MS = 15_000
 /** Render's free tier can take most of a minute to wake from a cold start. */
@@ -81,3 +91,12 @@ export const getMe = () => request<PublicUser>('GET', '/api/auth/me')
 export const signUp = (input: SignUpRequest) => request<PublicUser>('POST', '/api/auth/signup', input)
 export const signIn = (input: SignInRequest) => request<PublicUser>('POST', '/api/auth/login', input)
 export const signOut = () => request<void>('POST', '/api/auth/logout')
+
+const recordingPath = (id: string) => `/api/recordings/${encodeURIComponent(id)}`
+
+export const listRecordings = () => request<RecordingDto[]>('GET', '/api/recordings')
+export const createUpload = (input: CreateUploadRequest) =>
+  request<CreateUploadResponse>('POST', '/api/recordings', input)
+export const confirmUpload = (id: string, input: ConfirmUploadRequest) =>
+  request<RecordingDto>('POST', `${recordingPath(id)}/confirm`, input)
+export const getPlaybackUrl = (id: string) => request<PlaybackUrlResponse>('GET', `${recordingPath(id)}/playback-url`)
