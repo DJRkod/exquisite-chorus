@@ -1,8 +1,14 @@
 // Server entry point: load env, validate config, connect to MongoDB, listen.
-import 'dotenv/config'
+import { fileURLToPath } from 'node:url'
+import dotenv from 'dotenv'
 import { createApp } from './app.js'
 import { loadConfig } from './config.js'
 import { connectDb } from './db.js'
+
+// The repo-root .env (as the README says), resolved from this file so it works
+// from server/src (tsx) and server/dist (compiled). On Render there is no
+// .env; real environment variables win either way.
+dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)), quiet: true })
 
 const config = loadConfig(process.env)
 

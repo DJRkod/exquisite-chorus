@@ -54,6 +54,8 @@ npm run typecheck      # tsc in every workspace
 npm run build          # client bundle + server compile
 ```
 
+Deployment and cloud setup (AWS S3 + budget alert, MongoDB Atlas, Render): see [docs/setup.md](docs/setup.md).
+
 ## Repo notes
 
 `llm_logs_raburt3.csv` is Raymond's LLM chat log, required by the course LLM policy. It is
