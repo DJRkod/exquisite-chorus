@@ -220,6 +220,48 @@ describe('RecordingsPage capture and upload', () => {
     expect(FakeXHR.instances).toHaveLength(2)
   })
 
+  it('shows the upload error with Retry when the S3 upload times out', async () => {
+    FakeXHR.statuses = [-1, 204]
+    page({
+      'POST /api/recordings': presigned(),
+      'POST /api/recordings/new1/confirm': confirmed(),
+    })
+    const user = userEvent.setup()
+
+    await user.upload(await screen.findByLabelText('Pick an audio file'), mp3())
+    await user.click(await screen.findByRole('button', { name: 'Upload' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/upload failed/i)
+    expect(FakeXHR.instances[0].timeout).toBeGreaterThan(0)
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(rows()).toHaveLength(3))
+  })
+
+  it('asks to sign in again when presigning answers 401, then presigns and uploads', async () => {
+    let presigns = 0
+    const presign = (): Reply => (++presigns === 1 ? envelope(401, 'Not signed in') : presigned())
+    const { fetch } = page({
+      'POST /api/recordings': presign,
+      'POST /api/recordings/new1/confirm': confirmed(),
+      'POST /api/auth/login': envelope(200, 'Signed in', ADA),
+    })
+    const user = userEvent.setup()
+
+    await user.upload(await screen.findByLabelText('Pick an audio file'), mp3())
+    await user.click(await screen.findByRole('button', { name: 'Upload' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your session expired — sign in again to finish saving')
+    expect(FakeXHR.instances).toHaveLength(0)
+    await user.type(screen.getByLabelText('Password'), 'hunter22!')
+    await user.click(screen.getByRole('button', { name: 'Sign in and save' }))
+
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(presigns).toBe(2)
+    expect(FakeXHR.instances).toHaveLength(1)
+    expect(calls(fetch, 'POST /api/recordings/new1/confirm')).toHaveLength(1)
+    expect(screen.getByTestId('address')).toHaveTextContent(/^\/$/)
+  })
+
   it('keeps the upload pending on a confirm 401 and re-confirms after signing in again', async () => {
     let confirms = 0
     const confirm = (): Reply => (++confirms === 1 ? envelope(401, 'Not signed in') : confirmed())

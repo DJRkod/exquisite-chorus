@@ -15,6 +15,13 @@ export const EMPTY_FILE = 'That file is empty. Pick another one.'
 export const UPLOAD_FAILED = 'The upload failed. Check your connection and retry.'
 export const SESSION_EXPIRED = 'Your session expired — sign in again to finish saving'
 const METADATA_TIMEOUT_MS = 4_000
+/** S3 upload timeout: 120 s plus 30 s per MB, so a stalled upload fails instead of hanging. */
+const UPLOAD_BASE_TIMEOUT_MS = 120_000
+const UPLOAD_TIMEOUT_MS_PER_MB = 30_000
+
+function uploadTimeoutMs(bytes: number): number {
+  return UPLOAD_BASE_TIMEOUT_MS + Math.ceil((bytes / (1024 * 1024)) * UPLOAD_TIMEOUT_MS_PER_MB)
+}
 
 /** A message to show, or null when the file may be uploaded. */
 export function checkAudioFile(file: { type: string; size: number }): string | null {
@@ -118,6 +125,7 @@ export function postToS3(
   return new Promise<void>((resolve, reject) => {
     const xhr = new XHR()
     xhr.open('POST', target.url)
+    xhr.timeout = uploadTimeoutMs(blob.size)
     let lastPercent: number | undefined
     xhr.upload.addEventListener('progress', (event) => {
       if (!event.lengthComputable || event.total <= 0) return
@@ -173,6 +181,9 @@ export async function saveTake(take: Take, from: SaveFrom, deps: SaveDeps = {}):
       deps.onProgress?.(0)
       await postToS3(target, take.blob, deps)
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        throw new SaveError(SESSION_EXPIRED, 'upload', undefined, true)
+      }
       throw new SaveError(errorMessage(err, UPLOAD_FAILED), 'upload')
     }
   }

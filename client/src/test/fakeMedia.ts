@@ -58,7 +58,7 @@ export function fakeStream() {
 /** An XHR that answers each send with the next queued status (default 204). */
 export class FakeXHR extends EventTarget {
   static instances: FakeXHR[] = []
-  /** Statuses for upcoming sends; 0 means a network error. */
+  /** Statuses for upcoming sends; 0 means a network error, -1 a timeout. */
   static statuses: number[] = []
 
   readonly upload = new EventTarget()
@@ -66,6 +66,8 @@ export class FakeXHR extends EventTarget {
   url = ''
   body: FormData | null = null
   status = 0
+  /** Milliseconds, as the code under test sets it; 0 means no timeout. */
+  timeout = 0
 
   constructor() {
     super()
@@ -81,6 +83,10 @@ export class FakeXHR extends EventTarget {
     this.body = body
     const status = FakeXHR.statuses.shift() ?? 204
     queueMicrotask(() => {
+      if (status === -1) {
+        this.dispatchEvent(new Event('timeout'))
+        return
+      }
       for (const loaded of [50, 100]) {
         this.upload.dispatchEvent(new ProgressEvent('progress', { lengthComputable: true, loaded, total: 100 }))
       }

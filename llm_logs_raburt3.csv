@@ -26407,3 +26407,660 @@ BUILD EXIT 0
 <usage><subagent_tokens>97479</subagent_tokens><tool_uses>25</tool_uses><duration_ms>244421</duration_ms></usage>
 </task-notification>"
 "853aaa24-606a-4493-b82d-eee68a3c445a:0","2026-11-14T08:20:19.584Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\""; git status --short; (npm run lint && npm run typecheck && npm test && npm run build) > \""$TEMP/fx1.log\"" 2>&1; echo \""gates exit=$?\""; grep -E \""Tests \"" \""$TEMP/fx1.log\""; git add client && git commit -q -m \""fix(review): cancel superseded playback and harden recorder lifecycle\n\nApply review findings #1, #2, #3, #5: a request token and AbortSignal\ncancel in-flight single and group playback when superseded or stopped;\nthe Safari unlock clip's ended event no longer resets the row; the mic is\nreleased if the page unmounts during the permission prompt; recorder\nstop() resolves when the recorder already ended and surfaces errors.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/[redacted]\"" 2>&1 | grep -v warning; git log --oneline | head -1"", ""description"": ""Verify gates and commit first review-fix batch"", ""timeout"": 300000}"
+"870dd62f-2cc5-4795-a8e9-11e5487a6d44:0","2026-11-14T08:20:37.549Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result"," M client/src/recordings/RecordingsPage.test.tsx
+ M client/src/recordings/RecordingsPage.tsx
+ M client/src/recordings/playback.test.ts
+ M client/src/recordings/playback.ts
+ M client/src/recordings/recorder.test.ts
+ M client/src/recordings/recorder.ts
+ M client/src/test/fakeMedia.ts
+ M llm_logs_raburt3.csv
+gates exit=0
+      Tests  80 passed (80)
+      Tests  69 passed (69)
+warning: in the working copy of 'client/src/recordings/RecordingsPage.test.tsx', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'client/src/recordings/RecordingsPage.tsx', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'client/src/recordings/playback.test.ts', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'client/src/recordings/playback.ts', CRLF will be replaced by LF the next time Git touches it
+llm_logs_raburt3.csv: 1492 rows from C:\Users\User\.claude\projects\C--Users-User-Dropbox-UIUC-2026-Fall-CS-409-Art-of-Web-Programming-Project
+e779d34 fix(review): cancel superseded playback and harden recorder lifecycle"
+"08fb7554-6dab-416e-ae7a-f8687983664b:0","2026-11-14T08:20:39.302Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","The first fix batch is committed: 80 server tests and 69 client tests pass. Next, the upload-flow fixes:"
+"a09b6872-31f7-4451-b617-1656cdd25c88:0","2026-11-14T08:20:48.702Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Agent {""description"": ""Apply review fixes: upload flow"", ""subagent_type"": ""general-purpose"", ""prompt"": ""Apply validated code-review findings to the repo at C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project (branch feat/stack-skeleton; Windows; Node 24). Shared working directory: **do not `git add` or commit.** Do not re-run any code review. Do not touch `llm_logs_raburt3.csv`, docs/, `.githooks/`, `.claude/`, `CLAUDE.md`, or server code. Read `CLAUDE.md`.\n\nFull finding detail: C:\\Users\\User\\AppData\\Local\\Temp\\ce-code-review\\20261114-020203-ea9563d1\\review.json (findings #4 and #6). Locate code by the quoted evidence; skip with a one-line reason if it no longer matches. Write/extend tests in `client/src/recordings/upload.test.ts` (and `RecordingsPage.test.tsx` only if needed) using the existing fakes in `client/src/test/fakeMedia.ts` / `fakeApi.ts`; observe each new test fail before the fix.\n\n- #4 Session expiry before upload: in `client/src/recordings/upload.ts` `saveTake`, the upload-step catch turns every error (including an `ApiError` 401 from `createUpload`/presign) into a generic `SaveError(..., 'upload')`, so the reauth form never appears and Retry loops on 401. Mirror the confirm-step handling: on `ApiError` with status 401, throw `SaveError(SESSION_EXPIRED, 'upload', undefined, true)` (check the actual SaveError constructor/fields). RecordingsPage already shows ReauthForm when `sessionExpired` is true and resumes from the failed step — verify that resuming from 'upload' after sign-in re-presigns and uploads. Tests: saveTake with presign 401 → SaveError step 'upload', sessionExpired true; page-level: presign 401 → reauth form shown → after sign-in the upload proceeds and the recording appears.\n- #6 S3 upload XHR has no timeout: `postToS3` registers a 'timeout' listener but never sets `xhr.timeout`, so a stalled upload hangs forever with no cancel. Set `xhr.timeout` after `open` (use a generous value such as `Math.max(120_000, ms-per-MB scaling of blob.size)` — keep it simple and documented, e.g. 120 s + 30 s per MB) so the existing listener rejects with the existing S3 upload error. Test with the fake XHR firing 'timeout' → rejection, and the page shows the upload error with Retry.\n\nAlso fold in (cheap, same file, evidence from the review's testing_gaps): add the missing saveTake test for the confirm-422 restart-from-upload branch (SaveError step 'upload', no recordingId) — test only, no behavior change.\n\nVerify and report: root `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` all pass. Final message: per item applied/skipped (reason), files changed, tests added with the red failure observed, command results. Concise.""}"
+"32e9aa06-4371-4ce2-beda-3019156d5d7c:0","2026-11-14T08:20:48.706Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_prompt","Apply validated code-review findings to the repo at C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project (branch feat/stack-skeleton; Windows; Node 24). Shared working directory: **do not `git add` or commit.** Do not re-run any code review. Do not touch `llm_logs_raburt3.csv`, docs/, `.githooks/`, `.claude/`, `CLAUDE.md`, or server code. Read `CLAUDE.md`.
+
+Full finding detail: C:\Users\User\AppData\Local\Temp\ce-code-review\20261114-020203-ea9563d1\review.json (findings #4 and #6). Locate code by the quoted evidence; skip with a one-line reason if it no longer matches. Write/extend tests in `client/src/recordings/upload.test.ts` (and `RecordingsPage.test.tsx` only if needed) using the existing fakes in `client/src/test/fakeMedia.ts` / `fakeApi.ts`; observe each new test fail before the fix.
+
+- #4 Session expiry before upload: in `client/src/recordings/upload.ts` `saveTake`, the upload-step catch turns every error (including an `ApiError` 401 from `createUpload`/presign) into a generic `SaveError(..., 'upload')`, so the reauth form never appears and Retry loops on 401. Mirror the confirm-step handling: on `ApiError` with status 401, throw `SaveError(SESSION_EXPIRED, 'upload', undefined, true)` (check the actual SaveError constructor/fields). RecordingsPage already shows ReauthForm when `sessionExpired` is true and resumes from the failed step — verify that resuming from 'upload' after sign-in re-presigns and uploads. Tests: saveTake with presign 401 → SaveError step 'upload', sessionExpired true; page-level: presign 401 → reauth form shown → after sign-in the upload proceeds and the recording appears.
+- #6 S3 upload XHR has no timeout: `postToS3` registers a 'timeout' listener but never sets `xhr.timeout`, so a stalled upload hangs forever with no cancel. Set `xhr.timeout` after `open` (use a generous value such as `Math.max(120_000, ms-per-MB scaling of blob.size)` — keep it simple and documented, e.g. 120 s + 30 s per MB) so the existing listener rejects with the existing S3 upload error. Test with the fake XHR firing 'timeout' → rejection, and the page shows the upload error with Retry.
+
+Also fold in (cheap, same file, evidence from the review's testing_gaps): add the missing saveTake test for the confirm-422 restart-from-upload branch (SaveError step 'upload', no recordingId) — test only, no behavior change.
+
+Verify and report: root `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` all pass. Final message: per item applied/skipped (reason), files changed, tests added with the red failure observed, command results. Concise."
+"f7e94621-ea22-4e20-b17d-aaad2637e55d:0","2026-11-14T08:20:48.713Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result","Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)
+agentId: ae21719d12c93c51f (internal ID - do not mention to user. Use SendMessage with to: 'ae21719d12c93c51f', summary: '<5-10 word recap>' to continue this agent.)
+The agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.
+Do not duplicate this agent's work — avoid working with the same files or topics it is using.
+output_file: C:\Users\User\AppData\Local\Temp\claude\8eeb967062a64003\e98c1602-5de1-48cb-b5cf-ad09189e70d7\tasks\ae21719d12c93c51f.output
+Do NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification."
+"89892a29-fd16-47c5-a0b3-993a287f183f:0","2026-11-14T08:20:50.084Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","The upload-flow batch is running. The server confirm tests come last."
+"da5be3a9-febb-4287-a451-fa1bdcccab84:0","2026-11-14T08:20:50.135Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\""; cat CLAUDE.md | head -80; cat client/src/recordings/upload.ts; ls client/src/recordings client/src/test""}"
+"898938cf-2d5b-43d9-9948-f02799399a95:0","2026-11-14T08:20:50.311Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","# Working in this repo
+
+Five people share this repo, and not all of them use LLM agents. An agent can move faster than teammates can follow, so protect their work above all.
+
+## Before starting work
+
+- `git fetch` first, and check open PRs, issues and remote branches (`gh pr list`, `gh issue list`, `git branch -r`) for work that overlaps the task. If someone already owns it, stop and ask rather than build a duplicate.
+
+## Changing code
+
+- Work on a feature branch and open a PR. Don't push directly to `main`.
+- Never force-push, rebase, or reset a branch someone else has pushed to.
+- Don't delete or rewrite files, branches, or code that another person wrote unless explicitly asked. Check `git log` / `git blame` when unsure who owns something.
+- Keep changes scoped to the task. Don't reformat or ""clean up"" other people's code in passing.
+
+## Merging
+
+- Merge PRs only when asked. Never merge a teammate's PR on your own.
+- In a merge conflict, keep both sides' intent. If it's unclear which change should win, stop and ask.
+
+## LLM chat log
+
+`llm_logs_raburt3.csv` belongs to raburt3 and is regenerated by `scripts/export_llm_logs.py`. Don't edit it by hand, and don't add logging for other teammates.
+// Upload flow (KTD7, KTD8): check the file, presign, POST the multipart form
+// straight to S3 with progress, then confirm with the measured duration.
+// Each step can be resumed: a failed confirm retries confirm alone.
+import type { CreateUploadResponse, RecordingDto } from '@exquisite-chorus/shared'
+import { ApiError, confirmUpload, createUpload } from '../api/client.ts'
+import { errorMessage } from '../auth/errorMessage.ts'
+import { audioContextClass } from './playback.ts'
+import { toDurationMs, type Take } from './recorder.ts'
+
+/** Matches the server's presigned POST policy (20 MB). */
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+export const NOT_AUDIO = 'That isn’t an audio file. Pick an audio file instead.'
+export const TOO_LARGE = 'That file is over 20 MB. Pick a smaller one.'
+export const EMPTY_FILE = 'That file is empty. Pick another one.'
+export const UPLOAD_FAILED = 'The upload failed. Check your connection and retry.'
+export const SESSION_EXPIRED = 'Your session expired — sign in again to finish saving'
+const METADATA_TIMEOUT_MS = 4_000
+
+/** A message to show, or null when the file may be uploaded. */
+export function checkAudioFile(file: { type: string; size: number }): string | null {
+  if (!file.type.startsWith('audio/')) return NOT_AUDIO
+  if (file.size > MAX_UPLOAD_BYTES) return TOO_LARGE
+  if (file.size < 1) return EMPTY_FILE
+  return null
+}
+
+export interface MeasureDeps {
+  createAudio?: () => HTMLAudioElement
+  createObjectURL?: (blob: Blob) => string
+  revokeObjectURL?: (url: string) => void
+  /** Decodes the bytes and returns seconds. */
+  decode?: (data: ArrayBuffer) => Promise<number>
+  timeoutMs?: number
+}
+
+function metadataSeconds(blob: Blob, deps: Required<Omit<MeasureDeps, 'decode'>>): Promise<number> {
+  const url = deps.createObjectURL(blob)
+  const audio = deps.createAudio()
+  return new Promise<number>((resolve) => {
+    const done = (seconds: number) => {
+      clearTimeout(timer)
+      audio.removeEventListener('loadedmetadata', onLoaded)
+      audio.removeEventListener('error', onError)
+      audio.removeAttribute?.('src')
+      deps.revokeObjectURL(url)
+      resolve(seconds)
+    }
+    const onLoaded = () => done(audio.duration)
+    const onError = () => done(NaN)
+    const timer = setTimeout(() => done(NaN), deps.timeoutMs)
+    audio.addEventListener('loadedmetadata', onLoaded)
+    audio.addEventListener('error', onError)
+    audio.preload = 'metadata'
+    audio.src = url
+    audio.load()
+  })
+}
+
+async function decodeSeconds(data: ArrayBuffer): Promise<number> {
+  const Context = audioContextClass()
+  if (!Context) throw new Error('Web Audio is unavailable')
+  const ctx = new Context()
+  try {
+    return (await ctx.decodeAudioData(data)).duration
+  } finally {
+    void ctx.close?.()
+  }
+}
+
+/**
+ * Duration of a picked file in whole ms: metadata first, a full decode only
+ * when metadata has no finite duration (MediaRecorder WebM reports Infinity),
+ * and undefined when neither works. The server treats duration as optional.
+ */
+export async function measureDuration(blob: Blob, deps: MeasureDeps = {}): Promise<number | undefined> {
+  const seconds = await metadataSeconds(blob, {
+    createAudio: deps.createAudio ?? (() => new Audio()),
+    createObjectURL: deps.createObjectURL ?? ((b) => URL.createObjectURL(b)),
+    revokeObjectURL: deps.revokeObjectURL ?? ((u) => URL.revokeObjectURL(u)),
+    timeoutMs: deps.timeoutMs ?? METADATA_TIMEOUT_MS,
+  })
+  if (Number.isFinite(seconds) && seconds > 0) return toDurationMs(seconds * 1000)
+  try {
+    const decoded = await (deps.decode ?? decodeSeconds)(await blob.arrayBuffer())
+    return toDurationMs(decoded * 1000)
+  } catch {
+    return undefined
+  }
+}
+
+export class S3UploadError extends Error {
+  /** S3's HTTP status, or 0 when the reques
+[... truncated, 8894 characters total]"
+"bbaec150-49ef-4f11-93db-aa0045588ff5:0","2026-11-14T08:20:51.919Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/client/src\""; cat recordings/upload.test.ts; cat test/fakeMedia.ts test/fakeApi.ts""}"
+"3d17b17b-eaee-4c26-8543-4185160b5c67:0","2026-11-14T08:20:52.053Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { envelope, fakeApi } from '../test/fakeApi.ts'
+import { FakeXHR } from '../test/fakeMedia.ts'
+import {
+  checkAudioFile,
+  MAX_UPLOAD_BYTES,
+  measureDuration,
+  NOT_AUDIO,
+  postToS3,
+  saveTake,
+  SaveError,
+  TOO_LARGE,
+} from './upload.ts'
+
+const XHR = FakeXHR as unknown as typeof XMLHttpRequest
+const TARGET = {
+  url: 'https://bucket.s3.example.com/',
+  fields: { key: 'pending/u1/abc', 'Content-Type': 'audio/webm', Policy: 'p', 'X-Amz-Signature': 's' },
+}
+const READY = {
+  id: 'r1',
+  ownerId: 'u1',
+  status: 'ready',
+  contentType: 'audio/webm',
+  size: 10,
+  durationMs: 3200,
+  createdAt: '2026-11-14T12:00:00.000Z',
+}
+
+beforeEach(() => {
+  FakeXHR.instances = []
+  FakeXHR.statuses = []
+})
+
+describe('checkAudioFile', () => {
+  it('rejects non-audio types and files over 20 MB', () => {
+    expect(checkAudioFile({ type: 'video/mp4', size: 100 })).toBe(NOT_AUDIO)
+    expect(checkAudioFile({ type: '', size: 100 })).toBe(NOT_AUDIO)
+    expect(checkAudioFile({ type: 'audio/mpeg', size: 25 * 1024 * 1024 })).toBe(TOO_LARGE)
+    expect(checkAudioFile({ type: 'audio/mpeg', size: 0 })).not.toBeNull()
+    expect(checkAudioFile({ type: 'audio/mpeg', size: MAX_UPLOAD_BYTES })).toBeNull()
+  })
+})
+
+describe('postToS3', () => {
+  it('posts every field in order and the file last, reporting progress', async () => {
+    const onProgress = vi.fn()
+    const blob = new Blob(['abc'], { type: 'audio/webm' })
+
+    await postToS3(TARGET, blob, { onProgress, XHR })
+
+    const xhr = FakeXHR.instances[0]
+    expect(xhr.method).toBe('POST')
+    expect(xhr.url).toBe(TARGET.url)
+    const names = [...xhr.body!.keys()]
+    expect(names).toEqual(['key', 'Content-Type', 'Policy', 'X-Amz-Signature', 'file'])
+    expect(xhr.body!.get('Content-Type')).toBe('audio/webm')
+    expect(onProgress.mock.calls.map(([p]) => p)).toEqual([50, 100])
+  })
+
+  it('rejects when S3 refuses the upload or the network fails', async () => {
+    FakeXHR.statuses = [403, 0]
+    const blob = new Blob(['abc'], { type: 'audio/webm' })
+    await expect(postToS3(TARGET, blob, { XHR })).rejects.toThrow()
+    await expect(postToS3(TARGET, blob, { XHR })).rejects.toThrow()
+  })
+})
+
+describe('measureDuration', () => {
+  function fakeAudio(duration: number, event = 'loadedmetadata') {
+    const audio = new EventTarget() as EventTarget & { src: string; preload: string; duration: number; load: () => void }
+    audio.duration = duration
+    audio.load = () => queueMicrotask(() => audio.dispatchEvent(new Event(event)))
+    return audio as unknown as HTMLAudioElement
+  }
+  const urls = { createObjectURL: () => 'blob:x', revokeObjectURL: vi.fn() }
+  const blob = new Blob(['abc'], { type: 'audio/mpeg' })
+
+  it('reads the duration from metadata without decoding', async () => {
+    const decode = vi.fn()
+    expect(await measureDuration(blob, { ...urls, createAudio: () => fakeAudio(3.2004), decode })).toBe(3200)
+    expect(decode).not.toHaveBeenCalled()
+  })
+
+  it('falls back to decoding when metadata reports Infinity', async () => {
+    const decode = vi.fn().mockResolvedValue(4.5)
+    expect(await measureDuration(blob, { ...urls, createAudio: () => fakeAudio(Infinity), decode })).toBe(4500)
+  })
+
+  it('gives up quietly when decoding fails too', async () => {
+    const decode = vi.fn().mockRejectedValue(new Error('bad'))
+    expect(await measureDuration(blob, { ...urls, createAudio: () => fakeAudio(NaN, 'error'), decode })).toBeUndefined()
+  })
+})
+
+describe('saveTake', () => {
+  const take = { blob: new Blob(['abc'], { type: 'audio/webm' }), contentType: 'audio/webm', durationMs: 3200 }
+
+  it('presigns, uploads, then confirms with the duration', async () => {
+    const { fetch } = fakeApi({
+      'POST /api/recordings': envelope(201, 'Upload URL created', { recordingId: 'r1', ...TARGET }),
+      'POST /api/recordings/r1/confirm': envelope(200, 'OK', READY),
+    })
+    const onFinalizing = vi.fn()
+
+    const saved = await saveTake(take, { step: 'upload' }, { XHR, onFinalizing })
+
+    expect(saved).toEqual(READY)
+    expect(onFinalizing).toHaveBeenCalledWith('r1')
+    const bodies = fetch.mock.calls.map(([input, init]) => [String(input), JSON.parse(String(init?.body))])
+    expect(bodies).toEqual([
+      ['/api/recordings', { contentType: 'audio/webm', size: 3 }],
+      ['/api/recordings/r1/confirm', { durationMs: 3200 }],
+    ])
+  })
+
+  it('resumes from confirm without presigning or uploading again', async () => {
+    const { fetch } = fakeApi({ 'POST /api/recordings/r1/confirm': envelope(200, 'OK', READY) })
+    await saveTake({ ...take, durationMs: undefined }, { step: 'confirm', recordingId: 'r1' }, { XHR })
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({})
+    expect(FakeXHR.instances).toHaveLength(0)
+  })
+
+  it('reports which step failed', async () => {
+    fakeApi({
+      'POST /api/recordings': envelope(201, 'Upload URL created'
+[... truncated, 14246 characters total]"
+"4344f45c-d664-4d34-88b3-d0f00f5c6dd5:0","2026-11-14T08:20:54.810Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/client/src\""; cat recordings/RecordingsPage.tsx; grep -n \""it(\\|describe\\|sessionExpired\\|Sign in\\|reauth\\|Retry\\|statuses\\|routes\\[\"" recordings/RecordingsPage.test.tsx""}"
+"ecf978e4-241f-4db4-bc76-63e9829eadda:0","2026-11-14T08:20:54.946Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","// The signed-in home: record or pick audio, preview and upload it, and play
+// recordings alone or together. Capture moves idle → recording → recorded →
+// uploading → finalizing → done (back to idle), or to error with a Retry that
+// resumes from the step that failed.
+import type { RecordingDto } from '@exquisite-chorus/shared'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { getPlaybackUrl, listRecordings } from '../api/client.ts'
+import { errorMessage, GENERIC_ERROR } from '../auth/errorMessage.ts'
+import { useAuth } from '../auth/useAuth.ts'
+import {
+  audioContextClass,
+  isUnlockClip,
+  loadGroup,
+  playTrack,
+  startGroup,
+  TrackLoadError,
+  type PlayingGroup,
+} from './playback.ts'
+import { RECORDING_FAILED, RecorderError, startRecording, type ActiveRecording, type Take } from './recorder.ts'
+import { checkAudioFile, measureDuration, saveTake, SaveError, type SaveFrom } from './upload.ts'
+
+interface PreviewTake extends Take {
+  previewUrl: string
+}
+
+type Capture =
+  | { step: 'idle' }
+  | { step: 'starting' }
+  | { step: 'recording'; startedAt: number }
+  | { step: 'preparing' }
+  | { step: 'recorded'; take: PreviewTake }
+  | { step: 'uploading'; take: PreviewTake; percent: number }
+  | { step: 'finalizing'; take: PreviewTake }
+  | { step: 'error'; take: PreviewTake; message: string; from: SaveFrom; sessionExpired: boolean }
+
+type ListState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; items: RecordingDto[] }
+
+/** m:ss, or an em dash when unknown. */
+function formatDuration(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms)) return '—'
+  const total = Math.round(ms / 1000)
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+
+function formatDate(iso: string): string {
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime()) ? iso : dateFormat.format(date)
+}
+
+function describe(rec: RecordingDto): string {
+  return `${rec.ownerDisplayName || 'Unknown'}’s recording from ${formatDate(rec.createdAt)}`
+}
+
+/** Per-row play button text and aria-label prefix, by that row's playback phase. */
+const PLAY_BUTTON = {
+  idle: { text: 'Play', aria: 'Play' },
+  loading: { text: 'Loading…', aria: 'Loading' },
+  playing: { text: 'Stop', aria: 'Stop' },
+} as const
+
+/** ""Play together"" button text and aria-label, by group playback state. */
+const TOGETHER_BUTTON = {
+  idle: { text: 'Play together', aria: undefined },
+  loading: { text: 'Loading…', aria: undefined },
+  playing: { text: 'Stop', aria: 'Stop playing together' },
+} as const
+
+const fetchPlaybackUrl = (id: string) => getPlaybackUrl(id).then((playback) => playback.url)
+
+export default function RecordingsPage() {
+  const { user } = useAuth()
+  const [capture, setCapture] = useState<Capture>({ step: 'idle' })
+  const [notice, setNotice] = useState<string | null>(null)
+  const [list, setList] = useState<ListState>({ status: 'loading' })
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [single, setSingle] = useState<{ id: string; phase: 'loading' | 'playing' } | null>(null)
+  const [together, setTogether] = useState<'idle' | 'loading' | 'playing'>('idle')
+  const [playError, setPlayError] = useState<string | null>(null)
+
+  const activeRef = useRef<ActiveRecording | null>(null)
+  const previewRef = useRef<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const ctxRef = useRef<AudioContext | null>(null)
+  const groupRef = useRef<PlayingGroup | null>(null)
+  // The latest playback request: Stop, a newer Play, or unmounting bumps the
+  // token and aborts the pending load, so a superseded request changes nothing.
+  const playToken = useRef(0)
+  const pendingPlay = useRef<AbortController | null>(null)
+  const mounted = useRef(true)
+
+  // Release the mic, the preview URL, and any playing audio on the way out.
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      playToken.current += 1
+      pendingPlay.current?.abort()
+      activeRef.current?.cancel()
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current)
+      groupRef.current?.stop()
+      void ctxRef.current?.close?.()
+    }
+  }, [])
+
+  const fetchList = useCallback(() => {
+    listRecordings().then(
+      (items) => mounted.current && setList({ status: 'ready', items }),
+      (err: unknown) => mounted.current && setList({ status: 'error', message: errorMessage(err) }),
+    )
+  }, [])
+
+  useEffect(fetchList, [fetchList])
+
+  function reloadList() {
+    setList({ status: 'loading' })
+    fetchList()
+  }
+
+  // ---- capture ----
+
+  function showTake(take: Take) {
+    if (previewRef.current) 
+[... truncated, 21965 characters total]"
+"f1f8a5f3-2f28-44cd-9c5f-61647ce102e4:0","2026-11-14T08:20:56.360Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/client/src\""; sed -n 1,66p recordings/RecordingsPage.test.tsx; sed -n 195,248p recordings/RecordingsPage.test.tsx""}"
+"87fd7ed7-1084-4b71-8eb4-e476f805fddd:0","2026-11-14T08:20:56.494Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","import { act, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { envelope, type Reply, type Routes } from '../test/fakeApi.ts'
+import { domError, FakeAudioContext, FakeMediaRecorder, FakeXHR, installMedia } from '../test/fakeMedia.ts'
+import { renderApp } from '../test/renderApp.tsx'
+import { RECORDING_FAILED } from './recorder.ts'
+
+const ADA = { id: 'u1', email: '[redacted-email]', displayName: 'Ada Lovelace' }
+const S3 = 'https://bucket.s3.example.com/'
+const FIELDS = { key: 'pending/u1/abc', 'Content-Type': 'audio/mpeg', Policy: 'p', 'X-Amz-Signature': 's' }
+
+function rec(id: string, owner: string, durationMs: number | null, createdAt: string) {
+  return {
+    id,
+    ownerId: `owner-${id}`,
+    ownerDisplayName: owner,
+    status: 'ready',
+    contentType: 'audio/webm',
+    size: 100,
+    durationMs,
+    createdAt,
+  }
+}
+const GRACE = rec('g1', 'Grace Hopper', 65_000, '2026-11-13T12:00:00.000Z')
+const ALAN = rec('a1', 'Alan Turing', null, '2026-11-12T12:00:00.000Z')
+
+function page(routes: Routes = {}, list: unknown[] = [GRACE, ALAN]) {
+  return renderApp('/', {
+    'GET /api/auth/me': envelope(200, 'OK', ADA),
+    'GET /api/recordings': envelope(200, 'OK', list),
+    'GET /api/recordings/g1/playback-url': envelope(200, 'OK', { url: 'https://s3/g1', expiresAt: 'x' }),
+    'GET /api/recordings/a1/playback-url': envelope(200, 'OK', { url: 'https://s3/a1', expiresAt: 'x' }),
+    'GET https://s3/g1': { status: 200, body: 'bytes' },
+    'GET https://s3/a1': { status: 200, body: 'bytes' },
+    ...routes,
+  })
+}
+
+const presigned = (contentType = 'audio/mpeg') =>
+  envelope(201, 'Upload URL created', { recordingId: 'new1', url: S3, fields: { ...FIELDS, 'Content-Type': contentType } })
+const confirmed = (contentType = 'audio/mpeg') =>
+  envelope(200, 'OK', { ...rec('new1', '', 3200, '2026-11-14T12:00:00.000Z'), ownerId: 'u1', contentType, ownerDisplayName: undefined })
+
+const mp3 = () => new File(['mp3-bytes'], 'song.mp3', { type: 'audio/mpeg' })
+const rows = () => within(screen.getByRole('list', { name: 'Recordings' })).getAllByRole('listitem')
+const rowFor = (name: string) => rows().find((row) => within(row).queryByText(name))!
+/** Lets pending promises, fake fetches, and React updates run. */
+const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+
+/** A route that answers only when released. */
+function held(reply: Reply) {
+  let release: () => void = () => {}
+  const route = () => new Promise<Reply>((resolve) => (release = () => resolve(reply)))
+  return { route, release: () => release() }
+}
+
+const calls = (fetch: ReturnType<typeof renderApp>['fetch'], key: string) =>
+  fetch.mock.calls.filter(([input, init]) => `${init?.method ?? 'GET'} ${String(input)}` === key)
+
+let media: ReturnType<typeof installMedia>
+beforeEach(() => {
+  media = installMedia({ durationSeconds: 3.2 })
+})
+afterEach(() => media.restore())
+
+    await user.upload(await screen.findByLabelText('Pick an audio file'), makeFile())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    expect(screen.queryByRole('button', { name: 'Upload' })).not.toBeInTheDocument()
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
+    expect(FakeXHR.instances).toHaveLength(0)
+  })
+
+  it('surfaces an S3 failure and Retry presigns and uploads again', async () => {
+    FakeXHR.statuses = [403, 204]
+    const { fetch } = page({
+      'POST /api/recordings': presigned(),
+      'POST /api/recordings/new1/confirm': confirmed(),
+    })
+    const user = userEvent.setup()
+
+    await user.upload(await screen.findByLabelText('Pick an audio file'), mp3())
+    await user.click(await screen.findByRole('button', { name: 'Upload' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/upload failed/i)
+    expect(calls(fetch, 'POST /api/recordings/new1/confirm')).toHaveLength(0)
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(calls(fetch, 'POST /api/recordings')).toHaveLength(2)
+    expect(FakeXHR.instances).toHaveLength(2)
+  })
+
+  it('keeps the upload pending on a confirm 401 and re-confirms after signing in again', async () => {
+    let confirms = 0
+    const confirm = (): Reply => (++confirms === 1 ? envelope(401, 'Not signed in') : confirmed())
+    const { fetch } = page({
+      'POST /api/recordings': presigned(),
+      'POST /api/recordings/new1/confirm': confirm,
+      'POST /api/auth/login': envelope(200, 'Signed in', ADA),
+    })
+    const user = userEvent.setup()
+
+    await user.upload(await screen.findByLabelText('Pick an audio file'), mp3())
+    await user.click(await screen.findByRole('button', { name: 'Upload' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your session expired — sign in again to finish saving')
+    expect(scr
+[... truncated, 5480 characters total]"
+"af67a2f9-5c7b-4a76-b9f5-5cb2ca890d3b:0","2026-11-14T08:20:58.761Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","Writing tests first. Extending FakeXHR with a timeout sentinel."
+"d2fdf690-0d1b-4943-b021-e251af308ee4:0","2026-11-14T08:21:15.021Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/client/src\"" && python - <<'EOF'\np='test/fakeMedia.ts'\ns=open(p,encoding='utf-8').read()\ns=s.replace(\""\""\""  /** Statuses for upcoming sends; 0 means a network error. */\n  static statuses: number[] = []\""\""\"",\""\""\""  /** Statuses for upcoming sends; 0 means a network error, -1 a timeout. */\n  static statuses: number[] = []\""\""\"")\ns=s.replace(\""\""\""  status = 0\n\n  constructor() {\""\""\"",\""\""\""  status = 0\n  /** Milliseconds, as the code under test sets it; 0 means no timeout. */\n  timeout = 0\n\n  constructor() {\""\""\"")\ns=s.replace(\""\""\""    queueMicrotask(() => {\n      for (const loaded\""\""\"",\""\""\""    queueMicrotask(() => {\n      if (status === -1) {\n        this.dispatchEvent(new Event('timeout'))\n        return\n      }\n      for (const loaded\""\""\"")\nopen(p,'w',encoding='utf-8',newline='').write(s)\n\np='recordings/upload.test.ts'\ns=open(p,encoding='utf-8').read()\ns=s.replace(\""\""\""  postToS3,\n  saveTake,\n  SaveError,\n  TOO_LARGE,\n} from './upload.ts'\""\""\"",\""\""\""  postToS3,\n  saveTake,\n  SaveError,\n  SESSION_EXPIRED,\n  TOO_LARGE,\n  UPLOAD_FAILED,\n} from './upload.ts'\""\""\"")\ns=s.replace(\""\""\""    await expect(postToS3(TARGET, blob, { XHR })).rejects.toThrow()\n  })\n})\n\""\""\"",\""\""\""    await expect(postToS3(TARGET, blob, { XHR })).rejects.toThrow()\n  })\n\n  it('sets a size-scaled timeout and rejects when the upload stalls', async () => {\n    FakeXHR.statuses = [-1]\n    const blob = new Blob([new Uint8Array(2 * 1024 * 1024)], { type: 'audio/webm' })\n    await expect(postToS3(TARGET, blob, { XHR })).rejects.toThrow(UPLOAD_FAILED)\n    // 120 s base plus 30 s per MB.\n    expect(FakeXHR.instances[0].timeout).toBe(180_000)\n  })\n})\n\""\""\"")\ns=s.replace(\""\""\""    expect((confirm as SaveError).sessionExpired).toBe(true)\n  })\n})\""\""\"",\""\""\""    expect((confirm as SaveError).sessionExpired).toBe(true)\n  })\n\n  it('flags an expired session when presigning answers 401', async () => {\n    fakeApi({ 'POST /api/recordings': envelope(401, 'Not signed in') })\n    const err = await saveTake(take, { step: 'upload' }, { XHR }).catch((e: unknown) => e)\n    expect(err).toBeInstanceOf(SaveError)\n    expect((err as SaveError).step).toBe('upload')\n    expect((err as SaveError).sessionExpired).toBe(true)\n    expect((err as SaveError).message).toBe(SESSION_EXPIRED)\n    expect(FakeXHR.instances).toHaveLength(0)\n  })\n\n  it('restarts from upload when confirm rejects the upload with 422', async () => {\n    fakeApi({\n      'POST /api/recordings': envelope(201, 'Upload URL created', { recordingId: 'r1', ...TARGET }),\n      'POST /api/recordings/r1/confirm': envelope(422, 'The upload did not match'),\n    })\n    const err = await saveTake(take, { step: 'upload' }, { XHR }).catch((e: unknown) => e)\n    expect(err).toBeInstanceOf(SaveError)\n    expect((err as SaveError).step).toBe('upload')\n    expect((err as SaveError).recordingId).toBeUndefined()\n    expect((err as SaveError).sessionExpired).toBe(false)\n    expect((err as SaveError).message).toBe('The upload did not match')\n  })\n})\""\""\"")\nopen(p,'w',encoding='utf-8',newline='').write(s)\n\np='recordings/RecordingsPage.test.tsx'\ns=open(p,encoding='utf-8').read()\nanchor=\""\""\""  it('keeps the upload pending on a confirm 401\""\""\""\nnew=\""\""\""  it('shows the upload error with Retry when the S3 upload times out', async () => {\n    FakeXHR.statuses = [-1, 204]\n    page({\n      'POST /api/recordings': presigned(),\n      'POST /api/recordings/new1/confirm': confirmed(),\n    })\n    const user = userEvent.setup()\n\n    await user.upload(await screen.findByLabelText('Pick an audio file'), mp3())\n    await user.click(await screen.findByRole('button', { name: 'Upload' }))\n\n    expect(await screen.findByRole('alert')).toHaveTextContent(/upload failed/i)\n    expect(FakeXHR.instances[0].timeout).toBeGreaterThan(0)\n    await user.click(screen.getByRole('button', { name: 'Retry' }))\n    await waitFor(() => expect(rows()).toHaveLength(3))\n  })\n\n  it('asks to sign in again when presigning answers 401, then presigns and uploads', async () => {\n    let presigns = 0\n    const presign = (): Reply => (++presigns === 1 ? envelope(401, 'Not signed in') : presigned())\n    const { fetch } = page({\n      'POST /api/recordings': presign,\n      'POST /api/recordings/new1/confirm': confirmed(),\n      'POST /api/auth/login': envelope(200, 'Signed in', ADA),\n    })\n    const user = userEvent.setup()\n\n    await user.upload(await screen.findByLabelText('Pick an audio file'), mp3())\n    await user.click(await screen.findByRole('button', { name: 'Upload' }))\n\n    expect(await screen.findByRole('alert')).toHaveTextContent('Your session expired — sign in again to finish saving')\n    expect(FakeXHR.instances).toHaveLength(0)\n    await user.type(screen.getByLabelText('Password'), 'hunter22!')\n    await user.click(screen.getByRole('button', { name: 'Sign in and save' }))\n\n    await waitFor(() => expect(rows()).toHaveLength(3))\n    expect(presigns).toBe(2)\n    expect(FakeXHR.instances).toHaveLength(1)\n    expect(calls(fetch, 'POST /api/recordings/new1/confirm')).toHaveLength(1)\n    expect(screen.getByTestId('address')).toHaveTextContent(/^\\\\/$/)\n  })\n\n\""\""\""\nassert anchor in s\ns=s.replace(anchor,new+anchor)\nopen(p,'w',encoding='utf-8',newline='').write(s)\nEOF\ncd ..; npx vitest run src/recordings 2>&1 | grep -E \""✓|✗|×|FAIL|Tests |AssertionError|Expected|Received\"" | head -40""}"
+"fb0e9570-aaab-4c99-b57e-008761dfb759:0","2026-11-14T08:21:20.568Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","<stdin>:122: SyntaxWarning: invalid escape sequence '\/'
+     × sets a size-scaled timeout and rejects when the upload stalls 5ms
+     × flags an expired session when presigning answers 401 1ms
+     × shows the upload error with Retry when the S3 upload times out 112ms
+     × asks to sign in again when presigning answers 401, then presigns and uploads 106ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/recordings/RecordingsPage.test.tsx > RecordingsPage capture and upload > shows the upload error with Retry when the S3 upload times out
+AssertionError: expected 0 to be greater than 0
+ FAIL  src/recordings/RecordingsPage.test.tsx > RecordingsPage capture and upload > asks to sign in again when presigning answers 401, then presigns and uploads
+Expected element to have text content:
+Received:
+ FAIL  src/recordings/upload.test.ts > postToS3 > sets a size-scaled timeout and rejects when the upload stalls
+AssertionError: expected +0 to be 180000 // Object.is equality
+- Expected
++ Received
+ FAIL  src/recordings/upload.test.ts > saveTake > flags an expired session when presigning answers 401
+AssertionError: expected false to be true // Object.is equality
+- Expected
++ Received
+      Tests  4 failed | 45 passed (49)"
+"ef5c87c4-882f-4d46-9c5d-807397ebfc99:0","2026-11-14T08:21:22.755Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","Four red as expected (422 test passes, test-only). Checking the regex escape, then applying the fixes."
+"371f0a7f-61a9-47e2-becb-26e6b7e08c3f:0","2026-11-14T08:21:27.328Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/client/src\"" && grep -n 'toHaveTextContent(/^' recordings/RecordingsPage.test.tsx && python - <<'EOF'\np='recordings/upload.ts'\ns=open(p,encoding='utf-8').read()\ns=s.replace(\""\""\""const METADATA_TIMEOUT_MS = 4_000\n\""\""\"",\""\""\""const METADATA_TIMEOUT_MS = 4_000\n/** S3 upload timeout: 120 s plus 30 s per MB, so a stalled upload fails instead of hanging. */\nconst UPLOAD_BASE_TIMEOUT_MS = 120_000\nconst UPLOAD_TIMEOUT_MS_PER_MB = 30_000\n\nexport function uploadTimeoutMs(bytes: number): number {\n  return UPLOAD_BASE_TIMEOUT_MS + Math.ceil((bytes / (1024 * 1024)) * UPLOAD_TIMEOUT_MS_PER_MB)\n}\n\""\""\"")\ns=s.replace(\""\""\""    xhr.open('POST', target.url)\n\""\""\"",\""\""\""    xhr.open('POST', target.url)\n    xhr.timeout = uploadTimeoutMs(blob.size)\n\""\""\"")\ns=s.replace(\""\""\""    } catch (err) {\n      throw new SaveError(errorMessage(err, UPLOAD_FAILED), 'upload')\""\""\"",\""\""\""    } catch (err) {\n      if (err instanceof ApiError && err.status === 401) {\n        throw new SaveError(SESSION_EXPIRED, 'upload', undefined, true)\n      }\n      throw new SaveError(errorMessage(err, UPLOAD_FAILED), 'upload')\""\""\"")\nopen(p,'w',encoding='utf-8',newline='').write(s)\nEOF\ncd ..; npx vitest run src/recordings 2>&1 | grep -E \""×|Tests \"" | head""}"
+"a5fbe41a-56b8-4480-a168-89ea310100ba:0","2026-11-14T08:21:32.823Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","262:    expect(screen.getByTestId('address')).toHaveTextContent(/^\/$/)
+287:    expect(screen.getByTestId('address')).toHaveTextContent(/^\/$/)
+      Tests  49 passed (49)"
+"ac7ab6c4-7b05-47c3-a7f5-5dcf0af2e88e:0","2026-11-14T08:21:36.145Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && sed -i 's/^export function uploadTimeoutMs/function uploadTimeoutMs/' client/src/recordings/upload.ts && (npm run lint 2>&1 | tail -4; echo \""LINT=$?\""; npm run typecheck 2>&1 | tail -4; npm test 2>&1 | grep -E \""Tests |Test Files|failed\"" ; npm run build 2>&1 | tail -5)"", ""timeout"": 600000}"
+"21f7e430-cd75-4a8e-9219-9c7e1b21cd27:0","2026-11-14T08:21:52.577Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","> [redacted-email] lint
+> oxlint
+
+LINT=0
+
+> @exquisite-chorus/[redacted-email] typecheck
+> tsc --noEmit -p .
+
+ Test Files  3 passed (3)
+      Tests  80 passed (80)
+ Test Files  8 passed (8)
+      Tests  74 passed (74)
+[32m✓ built in 117ms[39m
+
+> @exquisite-chorus/[redacted-email] build
+> tsc -p tsconfig.build.json"
+"27431788-669b-403b-a104-7d79bf6a199a:0","2026-11-14T08:21:54.579Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && npm run lint 2>&1 | grep -iE \""warn|error|Found\""; npm run typecheck >/dev/null 2>&1; echo TC=$?; npm run build >/dev/null 2>&1; echo BUILD=$?; git status --short"", ""timeout"": 300000}"
+"cf2df57f-2def-4ed2-bd84-96790b908baf:0","2026-11-14T08:22:02.710Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","TC=0
+BUILD=0
+ M client/src/recordings/RecordingsPage.test.tsx
+ M client/src/recordings/upload.test.ts
+ M client/src/recordings/upload.ts
+ M client/src/test/fakeMedia.ts
+ M llm_logs_raburt3.csv"
+"83862c75-614a-4fc3-adeb-8d71df3ae4d1:0","2026-11-14T08:22:12.528Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","Both fixes are in, plus the extra 422 test. All six new tests fail where they should without the fixes, and lint, typecheck, tests and build all pass. Nothing is staged or committed.
+
+**#4 Session expiry at the upload step: applied.** In `saveTake`, a 401 from presigning now throws `SaveError(SESSION_EXPIRED, 'upload', undefined, true)`, the same way the confirm step handles it. The page then shows the sign-in form. After signing in, it resumes from 'upload' and presigns again, uploads to S3, confirms, and lists the new recording. The page test checks each of those steps.
+
+**#6 S3 upload timeout: applied.** `postToS3` now sets `xhr.timeout` right after `open`: 120 s plus 30 s per MB of the file (a small private helper, `uploadTimeoutMs`). The 'timeout' listener that was already there now rejects with the usual ""The upload failed"" error, and Retry works.
+
+**422 restart from upload: applied, test only.** It confirms the error names step 'upload', has no recordingId and is not flagged as session expired. As expected, it passed straight away because the code already behaves this way.
+
+**Files changed:**
+- `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\client\src\recordings\upload.ts`: both fixes.
+- `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\client\src\recordings\upload.test.ts`: 3 new tests.
+- `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\client\src\recordings\RecordingsPage.test.tsx`: 2 new tests.
+- `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\client\src\test\fakeMedia.ts`: the fake XHR had no way to time out, so I added a status of `-1` that fires 'timeout', plus a `timeout` field the tests can read.
+
+**Tests added, and how each failed before the fix:**
+- upload.test.ts, ""sets a size-scaled timeout and rejects when the upload stalls"": the timeout was 0 instead of the expected 180000.
+- upload.test.ts, ""flags an expired session when presigning answers 401"": `sessionExpired` was false.
+- upload.test.ts, ""restarts from upload when confirm rejects the upload with 422"": passed before the fix, as expected.
+- RecordingsPage.test.tsx, ""shows the upload error with Retry when the S3 upload times out"": the timeout was 0.
+- RecordingsPage.test.tsx, ""asks to sign in again when presigning answers 401, then presigns and uploads"": the session-expired message never appeared.
+
+**Commands (from the repo root):**
+
+| Command | Result |
+|---|---|
+| `npm run lint` | passed, no warnings |
+| `npm run typecheck` | passed |
+| `npm test` | passed: client 80/80, server 74/74 |
+| `npm run build` | passed |
+
+`git status` also shows `llm_logs_raburt3.csv` as modified. I didn't touch it; it is regenerated by its export script."
+"057b738d-9080-4ffe-9830-84678a8c0ce2:0","2026-11-14T08:22:12.562Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","prompt","<task-notification>
+<task-id>ae21719d12c93c51f</task-id>
+<tool-use-id>toolu_015dENmex38PfN3hQKSiJQ7W</tool-use-id>
+<output-file>C:\Users\User\AppData\Local\Temp\claude\8eeb967062a64003\e98c1602-5de1-48cb-b5cf-ad09189e70d7\tasks\ae21719d12c93c51f.output</output-file>
+<status>completed</status>
+<summary>Agent ""Apply review fixes: upload flow"" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Both fixes are in, plus the extra 422 test. All six new tests fail where they should without the fixes, and lint, typecheck, tests and build all pass. Nothing is staged or committed.
+
+**#4 Session expiry at the upload step: applied.** In `saveTake`, a 401 from presigning now throws `SaveError(SESSION_EXPIRED, 'upload', undefined, true)`, the same way the confirm step handles it. The page then shows the sign-in form. After signing in, it resumes from 'upload' and presigns again, uploads to S3, confirms, and lists the new recording. The page test checks each of those steps.
+
+**#6 S3 upload timeout: applied.** `postToS3` now sets `xhr.timeout` right after `open`: 120 s plus 30 s per MB of the file (a small private helper, `uploadTimeoutMs`). The 'timeout' listener that was already there now rejects with the usual ""The upload failed"" error, and Retry works.
+
+**422 restart from upload: applied, test only.** It confirms the error names step 'upload', has no recordingId and is not flagged as session expired. As expected, it passed straight away because the code already behaves this way.
+
+**Files changed:**
+- `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\client\src\recordings\upload.ts`: both fixes.
+- `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\client\src\recordings\upload.test.ts`: 3 new tests.
+- `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\client\src\recordings\RecordingsPage.test.tsx`: 2 new tests.
+- `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\client\src\test\fakeMedia.ts`: the fake XHR had no way to time out, so I added a status of `-1` that fires 'timeout', plus a `timeout` field the tests can read.
+
+**Tests added, and how each failed before the fix:**
+- upload.test.ts, ""sets a size-scaled timeout and rejects when the upload stalls"": the timeout was 0 instead of the expected 180000.
+- upload.test.ts, ""flags an expired session when presigning answers 401"": `sessionExpired` was false.
+- upload.test.ts, ""restarts from upload when confirm rejects the upload with 422"": passed before the fix, as expected.
+- RecordingsPage.test.tsx, ""shows the upload error with Retry when the S3 upload times out"": the timeout was 0.
+- RecordingsPage.test.tsx, ""asks to sign in again when presigning answers 401, then presigns and uploads"": the session-expired message never appeared.
+
+**Commands (from the repo root):**
+
+| Command | Result |
+|---|---|
+| `npm run lint` | passed, no warnings |
+| `npm run typecheck` | passed |
+| `npm test` | passed: client 80/80, server 74/74 |
+| `npm run build` | passed |
+
+`git status` also shows `llm_logs_raburt3.csv` as modified. I didn't touch it; it is regenerated by its export script.</result>
+<usage><subagent_tokens>68295</subagent_tokens><tool_uses>8</tool_uses><duration_ms>83836</duration_ms></usage>
+</task-notification>"
+"a9536cb5-989e-4497-85ab-2b1da79eec6e:0","2026-11-14T08:22:16.805Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","The worker reported ""server 74/74"", but the server had 80 tests. The labels are probably swapped: client was 69, plus 5 new tests, makes 74. I'll confirm before committing:"
+"a3c7c4f0-6c5e-459d-9149-f093aa94590f:0","2026-11-14T08:22:18.659Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\""; git status --short; (npm run lint && npm run typecheck && npm test && npm run build) > \""$TEMP/fx2.log\"" 2>&1; echo \""gates exit=$?\""; grep -E \""> @exquisite-chorus/(server|client)@0.0.0 test|Tests \"" \""$TEMP/fx2.log\"""", ""description"": ""Verify gates and per-workspace test counts"", ""timeout"": 300000}"
+"bbd6fe2e-b9b7-484b-840d-7b9dbaa6d64c:0","2026-11-14T08:22:34.923Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result"," M client/src/recordings/RecordingsPage.test.tsx
+ M client/src/recordings/upload.test.ts
+ M client/src/recordings/upload.ts
+ M client/src/test/fakeMedia.ts
+ M llm_logs_raburt3.csv
+gates exit=0
+> @exquisite-chorus/[redacted-email] test
+      Tests  80 passed (80)
+> @exquisite-chorus/[redacted-email] test
+      Tests  74 passed (74)"

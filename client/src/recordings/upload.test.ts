@@ -9,7 +9,9 @@ import {
   postToS3,
   saveTake,
   SaveError,
+  SESSION_EXPIRED,
   TOO_LARGE,
+  UPLOAD_FAILED,
 } from './upload.ts'
 
 const XHR = FakeXHR as unknown as typeof XMLHttpRequest
@@ -63,6 +65,14 @@ describe('postToS3', () => {
     const blob = new Blob(['abc'], { type: 'audio/webm' })
     await expect(postToS3(TARGET, blob, { XHR })).rejects.toThrow()
     await expect(postToS3(TARGET, blob, { XHR })).rejects.toThrow()
+  })
+
+  it('sets a size-scaled timeout and rejects when the upload stalls', async () => {
+    FakeXHR.statuses = [-1]
+    const blob = new Blob([new Uint8Array(2 * 1024 * 1024)], { type: 'audio/webm' })
+    await expect(postToS3(TARGET, blob, { XHR })).rejects.toThrow(UPLOAD_FAILED)
+    // 120 s base plus 30 s per MB.
+    expect(FakeXHR.instances[0].timeout).toBe(180_000)
   })
 })
 
@@ -137,6 +147,29 @@ describe('saveTake', () => {
     expect((confirm as SaveError).step).toBe('confirm')
     expect((confirm as SaveError).recordingId).toBe('r1')
     expect((confirm as SaveError).sessionExpired).toBe(true)
+  })
+
+  it('flags an expired session when presigning answers 401', async () => {
+    fakeApi({ 'POST /api/recordings': envelope(401, 'Not signed in') })
+    const err = await saveTake(take, { step: 'upload' }, { XHR }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SaveError)
+    expect((err as SaveError).step).toBe('upload')
+    expect((err as SaveError).sessionExpired).toBe(true)
+    expect((err as SaveError).message).toBe(SESSION_EXPIRED)
+    expect(FakeXHR.instances).toHaveLength(0)
+  })
+
+  it('restarts from upload when confirm rejects the upload with 422', async () => {
+    fakeApi({
+      'POST /api/recordings': envelope(201, 'Upload URL created', { recordingId: 'r1', ...TARGET }),
+      'POST /api/recordings/r1/confirm': envelope(422, 'The upload did not match'),
+    })
+    const err = await saveTake(take, { step: 'upload' }, { XHR }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SaveError)
+    expect((err as SaveError).step).toBe('upload')
+    expect((err as SaveError).recordingId).toBeUndefined()
+    expect((err as SaveError).sessionExpired).toBe(false)
+    expect((err as SaveError).message).toBe('The upload did not match')
   })
 })
 
