@@ -140,12 +140,11 @@ describe('saveTake', () => {
     FakeXHR.statuses = [500]
     const upload = await saveTake(take, { step: 'upload' }, { XHR }).catch((e: unknown) => e)
     expect(upload).toBeInstanceOf(SaveError)
-    expect((upload as SaveError).step).toBe('upload')
+    expect((upload as SaveError).resume).toEqual({ step: 'upload' })
 
     const confirm = await saveTake(take, { step: 'upload' }, { XHR }).catch((e: unknown) => e)
     expect(confirm).toBeInstanceOf(SaveError)
-    expect((confirm as SaveError).step).toBe('confirm')
-    expect((confirm as SaveError).recordingId).toBe('r1')
+    expect((confirm as SaveError).resume).toEqual({ step: 'confirm', recordingId: 'r1' })
     expect((confirm as SaveError).sessionExpired).toBe(true)
   })
 
@@ -153,7 +152,7 @@ describe('saveTake', () => {
     fakeApi({ 'POST /api/recordings': envelope(401, 'Not signed in') })
     const err = await saveTake(take, { step: 'upload' }, { XHR }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SaveError)
-    expect((err as SaveError).step).toBe('upload')
+    expect((err as SaveError).resume).toEqual({ step: 'upload' })
     expect((err as SaveError).sessionExpired).toBe(true)
     expect((err as SaveError).message).toBe(SESSION_EXPIRED)
     expect(FakeXHR.instances).toHaveLength(0)
@@ -166,8 +165,7 @@ describe('saveTake', () => {
     })
     const err = await saveTake(take, { step: 'upload' }, { XHR }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SaveError)
-    expect((err as SaveError).step).toBe('upload')
-    expect((err as SaveError).recordingId).toBeUndefined()
+    expect((err as SaveError).resume).toEqual({ step: 'upload' })
     expect((err as SaveError).sessionExpired).toBe(false)
     expect((err as SaveError).message).toBe('The upload did not match')
   })

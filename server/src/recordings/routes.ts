@@ -170,7 +170,7 @@ export function recordingsRouter(storage: Storage | null): Router {
 
   router.get('/recordings/:id/playback-url', async (req, res) => {
     const id = parseId(req.params.id)
-    const rec = await Recording.findOne({ _id: id, status: 'ready' })
+    const rec = await Recording.findOne({ _id: id, status: 'ready' }, { key: 1 }).lean()
     if (!rec?.key) throw new HttpError(404, 'Recording not found')
     respond<PlaybackUrlResponse>(res, 200, 'OK', await storage.presignPlayback(rec.key))
   })

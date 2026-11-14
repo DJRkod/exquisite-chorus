@@ -138,9 +138,10 @@ export function postToS3(
     xhr.addEventListener('load', () =>
       xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new S3UploadError(xhr.status)),
     )
-    xhr.addEventListener('error', () => reject(new S3UploadError(0)))
-    xhr.addEventListener('timeout', () => reject(new S3UploadError(0)))
-    xhr.addEventListener('abort', () => reject(new S3UploadError(0)))
+    const fail = () => reject(new S3UploadError(0))
+    xhr.addEventListener('error', fail)
+    xhr.addEventListener('timeout', fail)
+    xhr.addEventListener('abort', fail)
     xhr.send(form)
   })
 }
@@ -149,20 +150,19 @@ export function postToS3(
 export type SaveFrom = { step: 'upload' } | { step: 'confirm'; recordingId: string }
 
 export class SaveError extends Error {
-  /** The step a retry should start from. */
-  readonly step: 'upload' | 'confirm'
-  /** Set when the bytes are in S3 and only confirm remains. */
-  readonly recordingId?: string
+  /** Where a retry should start: confirm once the bytes are in S3, otherwise upload. */
+  readonly resume: SaveFrom
   readonly sessionExpired: boolean
 
-  constructor(message: string, step: 'upload' | 'confirm', recordingId?: string, sessionExpired = false) {
+  constructor(message: string, resume: SaveFrom, sessionExpired = false) {
     super(message)
-    this.step = step
-    this.recordingId = recordingId
+    this.resume = resume
     this.sessionExpired = sessionExpired
     this.name = 'SaveError'
   }
 }
+
+const isUnauthorized = (err: unknown) => err instanceof ApiError && err.status === 401
 
 export interface SaveDeps extends PostDeps {
   /** Called once the bytes are in S3 and confirm starts. */
@@ -181,22 +181,20 @@ export async function saveTake(take: Take, from: SaveFrom, deps: SaveDeps = {}):
       deps.onProgress?.(0)
       await postToS3(target, take.blob, deps)
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        throw new SaveError(SESSION_EXPIRED, 'upload', undefined, true)
-      }
-      throw new SaveError(errorMessage(err, UPLOAD_FAILED), 'upload')
+      if (isUnauthorized(err)) throw new SaveError(SESSION_EXPIRED, { step: 'upload' }, true)
+      throw new SaveError(errorMessage(err, UPLOAD_FAILED), { step: 'upload' })
     }
   }
 
   deps.onFinalizing?.(recordingId)
   try {
-    return await confirmUpload(recordingId, take.durationMs === undefined ? {} : { durationMs: take.durationMs })
+    // JSON.stringify drops an undefined durationMs, so the body is {} without one.
+    return await confirmUpload(recordingId, { durationMs: take.durationMs })
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
-      throw new SaveError(SESSION_EXPIRED, 'confirm', recordingId, true)
-    }
+    const confirm: SaveFrom = { step: 'confirm', recordingId }
+    if (isUnauthorized(err)) throw new SaveError(SESSION_EXPIRED, confirm, true)
     // A rejected upload cannot be confirmed again; start over with a new one.
-    if (err instanceof ApiError && err.status === 422) throw new SaveError(err.message, 'upload')
-    throw new SaveError(errorMessage(err, 'Saving failed. Retry to finish.'), 'confirm', recordingId)
+    if (err instanceof ApiError && err.status === 422) throw new SaveError(err.message, { step: 'upload' })
+    throw new SaveError(errorMessage(err, 'Saving failed. Retry to finish.'), confirm)
   }
 }

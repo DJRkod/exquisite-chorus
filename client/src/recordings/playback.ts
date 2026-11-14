@@ -127,7 +127,7 @@ export async function playTrack(
     await attempt(audio, await unlessAborted(fetchUrl(), signal), signal)
   } catch (err) {
     const name = (err as { name?: unknown } | null)?.name
-    if (name === 'NotAllowedError' || name === 'AbortError' || signal?.aborted) throw err
+    if (name === 'NotAllowedError' || isAbort(err) || signal?.aborted) throw err
     await attempt(audio, await unlessAborted(fetchUrl(), signal), signal)
   }
 }

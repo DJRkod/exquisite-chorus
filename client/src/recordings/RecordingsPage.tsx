@@ -87,9 +87,8 @@ export default function RecordingsPage() {
   const audioRef = useRef<HTMLAudioElement>(null)
   const ctxRef = useRef<AudioContext | null>(null)
   const groupRef = useRef<PlayingGroup | null>(null)
-  // The latest playback request: Stop, a newer Play, or unmounting bumps the
-  // token and aborts the pending load, so a superseded request changes nothing.
-  const playToken = useRef(0)
+  // The latest playback request: Stop, a newer Play, or unmounting aborts it,
+  // so a superseded request changes nothing.
   const pendingPlay = useRef<AbortController | null>(null)
   const mounted = useRef(true)
 
@@ -98,7 +97,6 @@ export default function RecordingsPage() {
     mounted.current = true
     return () => {
       mounted.current = false
-      playToken.current += 1
       pendingPlay.current?.abort()
       activeRef.current?.cancel()
       if (previewRef.current) URL.revokeObjectURL(previewRef.current)
@@ -191,7 +189,14 @@ export default function RecordingsPage() {
     setCapture(from.step === 'upload' ? { step: 'uploading', take, percent: 0 } : { step: 'finalizing', take })
     try {
       const saved = await saveTake(take, from, {
-        onProgress: (percent) => mounted.current && setCapture({ step: 'uploading', take, percent }),
+        // Same take at the same percent: return the current state so React skips the render.
+        onProgress: (percent) =>
+          mounted.current &&
+          setCapture((current) =>
+            current.step === 'uploading' && current.take === take && current.percent === percent
+              ? current
+              : { step: 'uploading', take, percent },
+          ),
         onFinalizing: () => mounted.current && setCapture({ step: 'finalizing', take }),
       })
       if (!mounted.current) return
@@ -206,15 +211,11 @@ export default function RecordingsPage() {
       if (!mounted.current) return
       // saveTake only rejects with SaveError; anything else restarts the upload.
       const failure = err instanceof SaveError ? err : null
-      const resume: SaveFrom =
-        failure?.step === 'confirm' && failure.recordingId
-          ? { step: 'confirm', recordingId: failure.recordingId }
-          : { step: 'upload' }
       setCapture({
         step: 'error',
         take,
         message: failure?.message ?? GENERIC_ERROR,
-        from: resume,
+        from: failure?.resume ?? { step: 'upload' },
         sessionExpired: failure?.sessionExpired ?? false,
       })
     }
@@ -222,19 +223,30 @@ export default function RecordingsPage() {
 
   // ---- playback ----
 
-  /** Supersedes any in-flight play request; returns the new request's token. */
-  function cancelPendingPlay(): number {
+  /** Supersedes (aborts) any in-flight play request. */
+  function cancelPendingPlay() {
     pendingPlay.current?.abort()
     pendingPlay.current = null
-    return ++playToken.current
   }
 
-  /** A fresh request: its token and the signal that cancels it. */
+  /**
+   * A fresh request and the signal that cancels it. Every supersede path aborts
+   * the pending controller, so the request is current exactly while its signal
+   * is not aborted. settle() returns false for a stale request; otherwise it
+   * marks the request finished and returns true.
+   */
   function beginPlay() {
-    const token = cancelPendingPlay()
+    cancelPendingPlay()
     const controller = new AbortController()
     pendingPlay.current = controller
-    return { token, signal: controller.signal, current: () => token === playToken.current }
+    return {
+      signal: controller.signal,
+      settle: () => {
+        if (controller.signal.aborted) return false
+        pendingPlay.current = null
+        return true
+      },
+    }
   }
 
   function stopSingle() {
@@ -264,12 +276,10 @@ export default function RecordingsPage() {
     setSingle({ id: rec.id, phase: 'loading' })
     try {
       await playTrack(audio, () => fetchPlaybackUrl(rec.id), request.signal)
-      if (!request.current()) return
-      pendingPlay.current = null
+      if (!request.settle()) return
       setSingle({ id: rec.id, phase: 'playing' })
     } catch {
-      if (!request.current()) return
-      pendingPlay.current = null
+      if (!request.settle()) return
       setSingle(null)
       setPlayError(`Couldn't play ${describe(rec)}. Try again.`)
     }
@@ -298,8 +308,7 @@ export default function RecordingsPage() {
     try {
       const buffers = await loadGroup(ctx, tracks, { fetchUrl: fetchPlaybackUrl }, request.signal)
       // Stopped, superseded, or unmounted while loading: start nothing.
-      if (!request.current()) return
-      pendingPlay.current = null
+      if (!request.settle()) return
       const group = startGroup(ctx, buffers, () => {
         if (groupRef.current !== group) return
         groupRef.current = null
@@ -308,8 +317,7 @@ export default function RecordingsPage() {
       groupRef.current = group
       setTogether('playing')
     } catch (err) {
-      if (!request.current()) return
-      pendingPlay.current = null
+      if (!request.settle()) return
       setTogether('idle')
       setPlayError(
         err instanceof TrackLoadError
