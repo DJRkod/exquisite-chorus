@@ -11,9 +11,11 @@ beforeAll(async () => {
   await mongoose.connect(mongod.getUri())
 })
 
+// Every collection in the database, not just Mongoose models': the session
+// store (connect-mongo) writes `sessions` through the raw driver.
 afterEach(async () => {
-  const { collections } = mongoose.connection
-  await Promise.all(Object.values(collections).map((c) => c.deleteMany({})))
+  const collections = await mongoose.connection.db!.collections()
+  await Promise.all(collections.map((c) => c.deleteMany({})))
 })
 
 afterAll(async () => {

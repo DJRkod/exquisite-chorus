@@ -1,11 +1,15 @@
 // Builds the Express app without listening, so tests can drive it with
-// supertest. Everything stateful (routers, and later rate limiters) is created
-// per call; nothing leaks between app instances.
+// supertest. Everything stateful (routers, rate limiters, the session store) is
+// created per call; nothing leaks between app instances.
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import express, { Router, type Express } from 'express'
+import type { Store } from 'express-session'
 import helmet from 'helmet'
+import { originCheck, requireJsonBody } from './auth/guards.js'
+import { authRouter } from './auth/routes.js'
+import { createSessionStore, sessionMiddleware } from './auth/session.js'
 import type { Config } from './config.js'
 import { dbState } from './db.js'
 import { apiNotFound, errorHandler, respond } from './http.js'
@@ -18,6 +22,10 @@ export interface AppDeps {
   clientDist?: string | null
   /** Extra routers mounted under /api, after the built-in ones and before the /api 404. */
   apiRouters?: Router[]
+  /** Session store. Defaults to connect-mongo on Mongoose's connection. */
+  sessionStore?: Store
+  /** bcrypt cost factor. Defaults to 12; tests pass a low value for speed. */
+  bcryptRounds?: number
 }
 
 function healthRouter(): Router {
@@ -44,10 +52,15 @@ export function createApp(config: Config, deps: AppDeps = {}): Express {
       },
     }),
   )
-  app.use(express.json())
 
-  // API: feature routers (auth, recordings) mount here in later units.
+  // CSRF defenses (KTD4) run before any body parsing or session work.
+  app.use('/api', originCheck(config.appOrigins), requireJsonBody)
+  app.use(express.json())
+  app.use('/api', sessionMiddleware(config, deps.sessionStore ?? createSessionStore()))
+
+  // API: built-in routers, then feature routers (recordings mounts in U4).
   app.use('/api', healthRouter())
+  app.use('/api', authRouter(config, { bcryptRounds: deps.bcryptRounds }))
   for (const router of deps.apiRouters ?? []) app.use('/api', router)
   app.use('/api', apiNotFound)
 

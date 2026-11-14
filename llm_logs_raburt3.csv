@@ -7959,3 +7959,1038 @@ export function createApp(config: Config, deps: AppDeps = {}): Express {
   app.use(errorHandler)
   return app
 }"
+"483b4b1d-6a5c-4fcb-a4dc-f6972e04f24f:0","2026-11-14T07:24:13.123Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","The checks pass on my run (19 server tests and 1 client test), and the app factory matches the plan. Committing U2:"
+"b42ce2f6-d481-48b2-aacc-3aed36874348:0","2026-11-14T07:24:16.324Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\""; git add .env.example package-lock.json server && git commit -q -m \""feat(server): Express foundation with config, envelope, and SPA hosting\n\ncreateApp() factory with helmet CSP (S3 origin allowed for media and\nfetch), trust proxy as a hop count, typed config that fails fast in\nproduction, central error mapping to the {message, data} envelope,\nhealth endpoint, and client/dist serving with deep-link fallback.\nTests run on mongodb-memory-server.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/[redacted]\"" 2>&1 | grep -v warning; git log --oneline | head -1"", ""description"": ""Commit U2""}"
+"223e062a-6587-4a9b-b9de-5e861fce64d3:0","2026-11-14T07:24:17.203Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result","llm_logs_raburt3.csv: 547 rows from C:\Users\User\.claude\projects\C--Users-User-Dropbox-UIUC-2026-Fall-CS-409-Art-of-Web-Programming-Project
+ad7c282 feat(server): Express foundation with config, envelope, and SPA hosting"
+"3f1ccb78-5472-4060-9a17-c33ec040e12c:0","2026-11-14T07:24:21.864Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","U2 is committed. U3, the login system, is next. It includes the review's fixes for rate-limit keying and a separate limiter per app instance, which prevents flaky tests."
+"bf592ac7-595c-41a5-8073-4901cf5e3638:0","2026-11-14T07:24:39.081Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Agent {""description"": ""Implement U3 authentication"", ""subagent_type"": ""general-purpose"", ""prompt"": ""You are implementing one unit of an implementation plan. Repo: C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project (git branch feat/stack-skeleton; Windows; Node 24.20, npm 11). U1 (scaffold) and U2 (Express foundation: server/src/app.ts createApp(config, deps), config.ts loadConfig, http.ts HttpError/respond/errorHandler, db.ts, server/test/setup.ts with mongodb-memory-server, supertest) are committed. Read those files first and build on them.\n\n**Do not commit, do not `git add`.** The orchestrator owns staging and commits. Do not edit the plan, `llm_logs_raburt3.csv`, `scripts/`, `.githooks/`, `.claude/`, `CLAUDE.md`, `docs/`. Read `CLAUDE.md`.\n\n## Plan context (read these sections only)\nPlan: docs/plans/2026-11-12-001-feat-tech-stack-plan.md — read `## Goal Capsule`, `### Key Technical Decisions` (KTD3–KTD6, KTD12–KTD14 matter most), `### U3. Authentication`, `## Verification Contract`, `## Definition of Done`. Do not implement other units (no recordings/S3, no client).\n\n## Your unit: U3 — Authentication\nFollow U3's Goal, Files, Approach, Execution note (test-first against the in-memory DB), and every Test scenario.\n\nOrchestrator corrections from document review (apply; they refine U3):\n- Sessions: `express-session` + `connect-mongo`, reusing Mongoose's client (`MongoStore.create({ client: mongoose.connection.getClient(), ttl: 14 days })` or equivalent current API — verify with docs/types; check the connect-mongo version's `mongodb` peer range resolves cleanly against what Mongoose 9 pulls in, and report). Cookie: `httpOnly`, `sameSite: 'lax'`, `secure` only in production (config.nodeEnv === 'production'), name e.g. `ec.sid`. `secret` from config.sessionSecret. Make the session store injectable via `AppDeps` so tests can use the same in-memory Mongo (or MemoryStore) — your call, but tests must exercise real session persistence across requests.\n- Rate limiting (`express-rate-limit`, current major): create limiter instances **inside createApp/per router factory**, never module-level, so each test app gets a fresh store. Login limiter: ~10 attempts / 15 min, `keyGenerator` combining `ipKeyGenerator(req.ip)` (the library's IPv6-safe helper) with the lowercased request email; `standardHeaders`, 429 returns the envelope. **Also apply the same kind of limiter to `POST /api/auth/signup`** (keyed by IP). Do not add a spoofed-X-Forwarded-For test (trust proxy is configured as a hop count in U2; the in-test client is effectively the proxy).\n- Origin check middleware: for POST/PUT/PATCH/DELETE under /api, if an `Origin` header is present and not in `config.appOrigins`, return 403 envelope. Absent Origin is allowed (same-origin non-browser/test clients). Also require `Content-Type: application/json` on state-changing requests that carry a body; otherwise 415 envelope. Logout has no body — allow it.\n- Password hashing: `bcryptjs` cost 12 (configurable lower in tests via config/deps for speed, e.g. 4).\n- User model: `email` (lowercase, trim, unique index), `displayName` (trim, 1–50 chars), `passwordHash`; `toJSON` transform removes `passwordHash` and maps `_id`→`id`, no `__v`. Ensure indexes are built in tests (`await User.init()` / syncIndexes) so the 409 test is real.\n- Validation: email shape (simple regex), password ≥ 8 chars (and ≤ 128), displayName required. 400 envelope with a clear message.\n- Login: identical 401 message for unknown email and wrong password (e.g. \""Invalid email or password\""). Regenerate session on signup and login (`req.session.regenerate`), then set `userId`, then `save`. Logout: `destroy`, clear cookie, 204.\n- `GET /api/auth/me`: 200 user or 401.\n- `requireAuth` guard exported for U4: loads `req.session.userId`, verifies the user still exists, attaches `req.user` (typed via module augmentation), else 401. Add express-session `SessionData` augmentation for `userId`.\n- Shared types in `shared/src/auth.ts` (types only, re-exported from shared/src/index.ts): `PublicUser { id, email, displayName }`, `SignUpRequest`, `SignInRequest`.\n- Mount auth router via createApp (wire it in app.ts so the real app has it; keep tests able to build the app with injected config).\n- Update `server/src/index.ts` only if needed to pass the session store.\n\n## Evidence\nWrite `server/test/auth.test.ts` covering all U3 test scenarios (+ the signup rate limit and 415/403 checks), run them and observe the expected failures before implementing. Report the red observation.\n\n## Verification (run and report)\nRoot: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` all pass.\n\n## Final message must report\n(a) every file created/modified; (b) evidence: behavior_changed, tests added (names), the red failure observed, each command + result, connect-mongo/mongodb peer resolution result, deviations and why. Concise.""}"
+"a01162fe-0f46-4e46-99e1-ca0cd1f18259:0","2026-11-14T07:24:39.086Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_prompt","You are implementing one unit of an implementation plan. Repo: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project (git branch feat/stack-skeleton; Windows; Node 24.20, npm 11). U1 (scaffold) and U2 (Express foundation: server/src/app.ts createApp(config, deps), config.ts loadConfig, http.ts HttpError/respond/errorHandler, db.ts, server/test/setup.ts with mongodb-memory-server, supertest) are committed. Read those files first and build on them.
+
+**Do not commit, do not `git add`.** The orchestrator owns staging and commits. Do not edit the plan, `llm_logs_raburt3.csv`, `scripts/`, `.githooks/`, `.claude/`, `CLAUDE.md`, `docs/`. Read `CLAUDE.md`.
+
+## Plan context (read these sections only)
+Plan: docs/plans/2026-11-12-001-feat-tech-stack-plan.md — read `## Goal Capsule`, `### Key Technical Decisions` (KTD3–KTD6, KTD12–KTD14 matter most), `### U3. Authentication`, `## Verification Contract`, `## Definition of Done`. Do not implement other units (no recordings/S3, no client).
+
+## Your unit: U3 — Authentication
+Follow U3's Goal, Files, Approach, Execution note (test-first against the in-memory DB), and every Test scenario.
+
+Orchestrator corrections from document review (apply; they refine U3):
+- Sessions: `express-session` + `connect-mongo`, reusing Mongoose's client (`MongoStore.create({ client: mongoose.connection.getClient(), ttl: 14 days })` or equivalent current API — verify with docs/types; check the connect-mongo version's `mongodb` peer range resolves cleanly against what Mongoose 9 pulls in, and report). Cookie: `httpOnly`, `sameSite: 'lax'`, `secure` only in production (config.nodeEnv === 'production'), name e.g. `ec.sid`. `secret` from config.sessionSecret. Make the session store injectable via `AppDeps` so tests can use the same in-memory Mongo (or MemoryStore) — your call, but tests must exercise real session persistence across requests.
+- Rate limiting (`express-rate-limit`, current major): create limiter instances **inside createApp/per router factory**, never module-level, so each test app gets a fresh store. Login limiter: ~10 attempts / 15 min, `keyGenerator` combining `ipKeyGenerator(req.ip)` (the library's IPv6-safe helper) with the lowercased request email; `standardHeaders`, 429 returns the envelope. **Also apply the same kind of limiter to `POST /api/auth/signup`** (keyed by IP). Do not add a spoofed-X-Forwarded-For test (trust proxy is configured as a hop count in U2; the in-test client is effectively the proxy).
+- Origin check middleware: for POST/PUT/PATCH/DELETE under /api, if an `Origin` header is present and not in `config.appOrigins`, return 403 envelope. Absent Origin is allowed (same-origin non-browser/test clients). Also require `Content-Type: application/json` on state-changing requests that carry a body; otherwise 415 envelope. Logout has no body — allow it.
+- Password hashing: `bcryptjs` cost 12 (configurable lower in tests via config/deps for speed, e.g. 4).
+- User model: `email` (lowercase, trim, unique index), `displayName` (trim, 1–50 chars), `passwordHash`; `toJSON` transform removes `passwordHash` and maps `_id`→`id`, no `__v`. Ensure indexes are built in tests (`await User.init()` / syncIndexes) so the 409 test is real.
+- Validation: email shape (simple regex), password ≥ 8 chars (and ≤ 128), displayName required. 400 envelope with a clear message.
+- Login: identical 401 message for unknown email and wrong password (e.g. ""Invalid email or password""). Regenerate session on signup and login (`req.session.regenerate`), then set `userId`, then `save`. Logout: `destroy`, clear cookie, 204.
+- `GET /api/auth/me`: 200 user or 401.
+- `requireAuth` guard exported for U4: loads `req.session.userId`, verifies the user still exists, attaches `req.user` (typed via module augmentation), else 401. Add express-session `SessionData` augmentation for `userId`.
+- Shared types in `shared/src/auth.ts` (types only, re-exported from shared/src/index.ts): `PublicUser { id, email, displayName }`, `SignUpRequest`, `SignInRequest`.
+- Mount auth router via createApp (wire it in app.ts so the real app has it; keep tests able to build the app with injected config).
+- Update `server/src/index.ts` only if needed to pass the session store.
+
+## Evidence
+Write `server/test/auth.test.ts` covering all U3 test scenarios (+ the signup rate limit and 415/403 checks), run them and observe the expected failures before implementing. Report the red observation.
+
+## Verification (run and report)
+Root: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` all pass.
+
+## Final message must report
+(a) every file created/modified; (b) evidence: behavior_changed, tests added (names), the red failure observed, each command + result, connect-mongo/mongodb peer resolution result, deviations and why. Concise."
+"75e90ba5-992d-4f6d-8382-dd1904323674:0","2026-11-14T07:24:39.093Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result","Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)
+agentId: a46d94bdc57033d27 (internal ID - do not mention to user. Use SendMessage with to: 'a46d94bdc57033d27', summary: '<5-10 word recap>' to continue this agent.)
+The agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.
+Do not duplicate this agent's work — avoid working with the same files or topics it is using.
+output_file: C:\Users\User\AppData\Local\Temp\claude\8eeb967062a64003\e98c1602-5de1-48cb-b5cf-ad09189e70d7\tasks\a46d94bdc57033d27.output
+Do NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification."
+"c5a96f1f-7837-42ed-a01b-cd83065c9599:0","2026-11-14T07:24:40.264Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","U3 is running in the background. Two units are committed so far: the scaffold (U1) and the Express foundation (U2)."
+"77758677-c26d-4cfe-9b90-500176d60f2d:0","2026-11-14T07:24:41.004Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && cat CLAUDE.md && git status --short && ls && cat package.json && ls server server/src server/test shared shared/src && cat server/package.json shared/package.json"", ""description"": ""Inspect repo layout and config""}"
+"25c881db-8389-4b4a-8cc7-59796e4e0112:0","2026-11-14T07:24:41.261Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","# Working in this repo
+
+Five people share this repo, and not all of them use LLM agents. An agent can move faster than teammates can follow, so protect their work above all.
+
+## Before starting work
+
+- `git fetch` first, and check open PRs, issues and remote branches (`gh pr list`, `gh issue list`, `git branch -r`) for work that overlaps the task. If someone already owns it, stop and ask rather than build a duplicate.
+
+## Changing code
+
+- Work on a feature branch and open a PR. Don't push directly to `main`.
+- Never force-push, rebase, or reset a branch someone else has pushed to.
+- Don't delete or rewrite files, branches, or code that another person wrote unless explicitly asked. Check `git log` / `git blame` when unsure who owns something.
+- Keep changes scoped to the task. Don't reformat or ""clean up"" other people's code in passing.
+
+## Merging
+
+- Merge PRs only when asked. Never merge a teammate's PR on your own.
+- In a merge conflict, keep both sides' intent. If it's unclear which change should win, stop and ask.
+
+## LLM chat log
+
+`llm_logs_raburt3.csv` belongs to raburt3 and is regenerated by `scripts/export_llm_logs.py`. Don't edit it by hand, and don't add logging for other teammates.
+ M llm_logs_raburt3.csv
+CLAUDE.md
+README.md
+client/
+docs/
+llm_logs_raburt3.csv
+node_modules/
+package-lock.json
+package.json
+scripts/
+server/
+shared/
+tsconfig.base.json
+{
+  ""name"": ""exquisite-chorus"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""workspaces"": [
+    ""shared"",
+    ""server"",
+    ""client""
+  ],
+  ""engines"": {
+    ""node"": "">=24 <25""
+  },
+  ""scripts"": {
+    ""dev"": ""concurrently -k -n server,client -c blue,magenta \""npm run dev -w server\"" \""npm run dev -w client\"""",
+    ""lint"": ""oxlint"",
+    ""typecheck"": ""npm run typecheck --workspaces"",
+    ""test"": ""npm run test -w server -w client"",
+    ""build"": ""npm run build -w client -w server"",
+    ""start"": ""npm run start -w server""
+  },
+  ""devDependencies"": {
+    ""concurrently"": ""^10.0.7"",
+    ""oxlint"": ""^1.93.0"",
+    ""typescript"": ""~6.0.3""
+  }
+}
+server:
+dist/
+node_modules/
+package.json
+src/
+test/
+tsconfig.build.json
+tsconfig.json
+vitest.config.ts
+
+server/src:
+app.ts
+config.ts
+db.ts
+http.ts
+index.ts
+
+server/test:
+app.test.ts
+setup.ts
+
+shared:
+package.json
+src/
+tsconfig.json
+
+shared/src:
+index.ts
+{
+  ""name"": ""@exquisite-chorus/server"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""scripts"": {
+    ""dev"": ""tsx watch src/index.ts"",
+    ""build"": ""tsc -p tsconfig.build.json"",
+    ""start"": ""node dist/index.js"",
+    ""typecheck"": ""tsc --noEmit -p ."",
+    ""test"": ""vitest run"",
+    ""test:watch"": ""vitest""
+  },
+  ""dependencies"": {
+    ""dotenv"": ""^18.0.10"",
+    ""express"": ""^5.3.0"",
+    ""helmet"": ""^8.3.0"",
+    ""mongoose"": ""^9.12.1""
+  },
+  ""devDependencies"": {
+    ""@exquisite-chorus/shared"": ""*"",
+    ""@types/express"": ""^5.0.6"",
+    ""@types/node"": ""^24.19.2"",
+    ""@types/supertest"": ""^7.2.1"",
+    ""mongodb-memory-server"": ""^11.3.0"",
+    ""supertest"": ""^7.3.2"",
+    ""tsx"": ""^4.23.15"",
+    ""vitest"": ""^5.1.0""
+  }
+}
+{
+  ""name"": ""@exquisite-chorus/shared"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""description"": ""API payload types shared by client and server. Types only: consumers use `import type`."",
+  ""exports"": {
+    ""."": {
+      ""types"": ""./src/index.ts""
+    }
+  },
+  ""scripts"": {
+    ""typecheck"": ""tsc --noEmit -p .""
+  }
+}"
+"ceb862c6-51af-4bd0-9263-6df1f88cc336:0","2026-11-14T07:24:43.362Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && for f in server/src/*.ts server/test/*.ts server/vitest.config.ts server/tsconfig.json server/tsconfig.build.json shared/src/index.ts shared/tsconfig.json; do echo \""=== $f\""; cat \""$f\""; done; ls -a; cat .oxlintrc.json 2>/dev/null"", ""description"": ""Read existing server sources""}"
+"07e3aa3b-9806-432f-8e4f-d68428ea35a7:0","2026-11-14T07:24:43.847Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","=== server/src/app.ts
+// Builds the Express app without listening, so tests can drive it with
+// supertest. Everything stateful (routers, and later rate limiters) is created
+// per call; nothing leaks between app instances.
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import express, { Router, type Express } from 'express'
+import helmet from 'helmet'
+import type { Config } from './config.js'
+import { dbState } from './db.js'
+import { apiNotFound, errorHandler, respond } from './http.js'
+
+/** client/dist, resolved from this file: works from server/src (tsx) and server/dist (compiled). */
+export const DEFAULT_CLIENT_DIST = fileURLToPath(new URL('../../client/dist', import.meta.url))
+
+export interface AppDeps {
+  /** Built SPA directory. `null` disables static hosting; a missing directory is skipped. */
+  clientDist?: string | null
+  /** Extra routers mounted under /api, after the built-in ones and before the /api 404. */
+  apiRouters?: Router[]
+}
+
+function healthRouter(): Router {
+  const router = Router()
+  router.get('/health', (_req, res) => {
+    respond(res, 200, 'OK', { db: dbState() })
+  })
+  return router
+}
+
+export function createApp(config: Config, deps: AppDeps = {}): Express {
+  const app = express()
+
+  app.set('trust proxy', config.trustProxy)
+
+  const s3 = config.s3Origin ? [config.s3Origin] : []
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          mediaSrc: [""'self'"", 'blob:', ...s3],
+          connectSrc: [""'self'"", ...s3],
+        },
+      },
+    }),
+  )
+  app.use(express.json())
+
+  // API: feature routers (auth, recordings) mount here in later units.
+  app.use('/api', healthRouter())
+  for (const router of deps.apiRouters ?? []) app.use('/api', router)
+  app.use('/api', apiNotFound)
+
+  // SPA: static assets, then index.html for client-side routes. /api never
+  // reaches here because the /api 404 above ends every unmatched API request.
+  const clientDist = deps.clientDist === undefined ? DEFAULT_CLIENT_DIST : deps.clientDist
+  if (clientDist && existsSync(path.join(clientDist, 'index.html'))) {
+    app.use(express.static(clientDist))
+    app.get('/{*splat}', (_req, res, next) => {
+      res.sendFile('index.html', { root: clientDist }, (err) => {
+        if (err) next(err)
+      })
+    })
+  }
+
+  app.use(errorHandler)
+  return app
+}
+=== server/src/config.ts
+// Parses and validates environment variables into a typed config object.
+// In production, missing or weak settings stop the server at startup; in
+// development and test, sensible local defaults apply.
+
+export type NodeEnv = 'development' | 'test' | 'production'
+
+export interface Config {
+  nodeEnv: NodeEnv
+  port: number
+  mongodbUri: string
+  sessionSecret: string
+  /** Allowed browser origins, from comma-separated APP_ORIGIN. */
+  appOrigins: string[]
+  /** Number of reverse-proxy hops to trust, or false. Never `true`. */
+  trustProxy: number | false
+  aws: {
+    region: string
+    bucket: string
+    accessKeyId?: string
+    secretAccessKey?: string
+  }
+  /** `https://<bucket>.s3.<region>.amazonaws.com`, or undefined without a bucket. */
+  s3Origin?: string
+}
+
+type Env = Record<string, string | undefined>
+
+const MIN_SECRET_LENGTH = 32
+
+function value(env: Env, name: string): string | undefined {
+  const raw = env[name]?.trim()
+  return raw ? raw : undefined
+}
+
+function parseNodeEnv(raw: string | undefined): NodeEnv {
+  if (raw === undefined) return 'development'
+  if (raw === 'development' || raw === 'test' || raw === 'production') return raw
+  throw new Error(`NODE_ENV must be development, test or production (got ""${raw}"")`)
+}
+
+function parsePort(raw: string | undefined): number {
+  if (raw === undefined) return 3000
+  const port = Number(raw)
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error(`PORT must be an integer from 0 to 65535 (got ""${raw}"")`)
+  }
+  return port
+}
+
+function parseTrustProxy(raw: string | undefined, nodeEnv: NodeEnv): number | false {
+  if (raw === undefined) return nodeEnv === 'production' ? 1 : false
+  if (raw === 'false') return false
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`TRUST_PROXY must be a number of proxy hops or ""false"" (got ""${raw}"")`)
+  }
+  const hops = Number(raw)
+  return hops === 0 ? false : hops
+}
+
+export function loadConfig(env: Env): Config {
+  const nodeEnv = parseNodeEnv(value(env, 'NODE_ENV'))
+  const production = nodeEnv === 'production'
+
+  if (production) {
+    const required = ['MONGODB_URI', 'SESSION_SECRET', 'APP_ORIGIN', 'S3_BUCKET', 'AWS_REGION']
+    const missing = required.filter((name) => value(env, name) === undefined)
+    if (missing.length > 0) {
+      throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
+    }
+  }
+
+  const sessionSecret = value(env, 'SESSION_SECRET') ?? 'dev-only-session-secret-not-for-production'
+  if (production && sessionSecret.length < MIN_SECRET_LENGTH) {
+    throw new Error(`SESSION_SECRET must be a
+[... truncated, 18750 characters total]"
+"db2ee5e1-b958-491b-bf29-13ebfd8a5627:0","2026-11-14T07:24:44.374Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && f=docs/plans/2026-11-12-001-feat-tech-stack-plan.md; grep -n \""^##\\|^###\"" $f | head -80"", ""description"": ""List plan headings""}"
+"8f2036c0-b567-400f-b8a5-bee8f956c279:0","2026-11-14T07:24:44.480Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","14:## Goal Capsule
+25:## Product Contract
+29:### Summary
+33:### Problem Frame
+39:### Key Decisions
+59:### Requirements
+82:### Scope Boundaries
+89:### Dependencies / Assumptions
+98:### Sources / Research
+109:## Planning Contract
+111:### Key Technical Decisions
+128:### High-Level Technical Design
+176:### Output Structure
+196:### Assumptions
+201:### Risks & Dependencies
+215:### Planning Sources
+228:## Implementation Units
+230:### U1. Monorepo scaffold and tooling
+248:### U2. Express foundation and SPA hosting
+274:### U3. Authentication
+310:### U4. Recordings API and S3 integration
+347:### U5. Client shell, API client, and auth screens
+372:### U6. Recording capture, upload, and playback UI
+407:### U7. Deployment, cloud setup runbook, and secret hygiene
+439:## Verification Contract
+454:## Definition of Done"
+"5f82fe1e-885a-45e2-838c-b58d59e9720e:0","2026-11-14T07:24:46.251Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && f=docs/plans/2026-11-12-001-feat-tech-stack-plan.md; sed -n '14,24p;111,127p;274,309p;439,480p' $f"", ""description"": ""Read relevant plan sections""}"
+"15770b32-1f37-4562-a0a1-784f3894f270:0","2026-11-14T07:24:46.361Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","## Goal Capsule
+
+- **Objective:** Stand up the Exquisite Chorus stack as a deployed walking skeleton. It proves sign-up/sign-in, audio upload to S3, and synced playback end to end, so product features can be built on it toward the Dec 8, 2026 submission.
+- **Product authority:** App behavior comes from [docs/proposal.pdf](../proposal.pdf). The Product Contract below decides the stack, the Planning Contract decides how it is built, and unit bodies are authoritative over summaries. Product features (skills, tags, feed matching, contributions, project tracking) are later plans, not active scope.
+- **Open blockers:** None.
+- **Stop conditions:** Stop and ask if a settled decision proves unworkable, if AWS or Render setup needs a credential only raburt3 holds, or if a change would touch work a teammate has pushed (see `CLAUDE.md`).
+- **Execution profile:** TypeScript monorepo; units land in dependency order; API units are test-first against an in-memory database with S3 mocked.
+- **Tail ownership:** Work on a feature branch and open a PR to `main`; never merge without raburt3's say-so (`CLAUDE.md`).
+
+---
+
+### Key Technical Decisions
+
+- KTD1. **TypeScript on client, server, and a shared types package** (session-settled: user-directed — chosen over plain JavaScript and a TS-frontend/JS-backend split: shared API payload types catch frontend/backend drift across five contributors.) npm workspaces: `client/`, `server/`, `shared/`.
+- KTD2. **One Render web service: Express serves the built SPA and the API from the same origin.** `onrender.com` is on the Public Suffix List, so a separate static site would make the session cookie cross-site, which Safari and Firefox block. Same origin also removes API CORS. Cost: the frontend shares the API's cold start, handled by a wake-up banner (U5). Instantiates Product Contract R2.
+- KTD3. **Server-side sessions via `express-session` + `connect-mongo`, not JWTs.** Logout revokes immediately, and the session ID is regenerated on sign-in. Cookie: `httpOnly`, `secure` in production, `sameSite: 'lax'`, with `trust proxy` set because Render terminates TLS. Instantiates the team-built-auth Key Decision.
+- KTD4. **CSRF defense = SameSite=Lax + same origin + `Origin` header check on state-changing routes + JSON-only bodies.** `csurf` is deprecated and unnecessary under KTD2.
+- KTD5. **`bcryptjs` (cost 12) for password hashing.** Pure JS avoids native builds on teammates' Windows machines; the latency is acceptable at demo scale.
+- KTD6. **Login rate limit with `express-rate-limit`**, about 10 attempts per 15 minutes keyed on IP + email. It relies on `trust proxy`. Unknown-user and wrong-password return the same error.
+- KTD7. **Uploads use presigned POST, not PUT.** Only a POST policy can enforce `content-length-range` (1 B–20 MB) and an `audio/` content type at S3. It also sidesteps the SDK's checksum parameters that break browser PUTs. The policy expires in 5 minutes.
+- KTD8. **Uploads land under `pending/{userId}/{uuid}`, and confirm promotes them to `audio/{userId}/{uuid}`.** The server mints every key. Confirm runs `HeadObject`, re-checks size and type, copies to `audio/`, deletes the pending object, and marks the Recording `ready`. An S3 lifecycle rule expires `pending/` after 1 day, so abandoned uploads clean themselves up. Confirm is idempotent.
+- KTD9. **The bucket stays private, and playback uses presigned GET URLs valid for 1 hour.** Block Public Access stays on, and the client requests a URL at play time and retries once on a 403. Instantiates R4.
+- KTD10. **Synced playback uses the Web Audio API.** Each track is fetched, decoded with `decodeAudioData`, and every source is started at the same `AudioContext.currentTime + 0.1`. The context is resumed on a user gesture. Separate `<audio>` elements drift. Single-track playback may use `<audio>`.
+- KTD11. **Formats are stored as recorded, with no server transcoding.** The recorder picks the first supported type from `audio/mp4`, `audio/webm;codecs=opus`, `audio/ogg;codecs=opus` and stores the actual MIME type. Duration comes from decoded audio, because MediaRecorder WebM reports `Infinity`. If the cross-browser check fails on old Safari, that is a known limitation, not a blocker.
+- KTD12. **Current majors: Node 24 (pinned), Express 5, Mongoose 9, React 19, Vite 8, AWS SDK v3.** Mongoose 9 `pre` hooks take no `next()`, and Express 5 named wildcards (`/*splat`) differ from the MP3 code. All `@aws-sdk/*` packages move in lockstep.
+- KTD13. **Port MP3's response envelope and error handling** (`{message, data}`, `HttpError`, central error middleware), but use real unique indexes instead of app-level uniqueness checks. Express 5 forwards async rejections natively, so MP3's `wrap()` is dropped.
+- KTD14. **Tests run on vitest throughout.** The API uses supertest against an exported `app`, `mongodb-memory-server`, and `aws-sdk-client-mock`. The client uses Testing Library with jsdom. Unlike MP3's tests, these never touch Atlas or AWS.
+
+### 
+[... truncated, 8954 characters total]"
+"e89504b3-d54b-4f10-b9fa-9af405251722:0","2026-11-14T07:24:48.817Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && for p in express-session connect-mongo express-rate-limit bcryptjs @types/express-session; do echo \""$p: $(npm view $p version) $(npm view $p peerDependencies --json 2>/dev/null | tr -d '\\n ')\""; done; npm ls mongodb"", ""description"": ""Check package versions and peer deps""}"
+"0697aecb-f6e1-482d-8511-4d474220242f:0","2026-11-14T07:24:59.333Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","express-session: 1.19.0 
+connect-mongo: 6.0.0 {""express-session"":""^1.17.1"",""mongodb"":"">=5.0.0""}
+express-rate-limit: 8.7.4 {""express"":"">=4.11""}
+bcryptjs: 3.0.3 
+@types/express-session: 1.19.0 {}
+[redacted-email] C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project
+`-- @exquisite-chorus/[redacted-email] -> .\server
+  +-- [redacted-email]
+  | `-- [redacted-email]
+  |   `-- [redacted-email]
+  `-- [redacted-email]
+    `-- [redacted-email]"
+"813cef09-4182-4556-bb97-80293e7c1789:0","2026-11-14T07:25:01.918Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && npm install -w server express-session@^1.19.0 connect-mongo@^6.0.0 express-rate-limit@^8.7.4 bcryptjs@^3.0.3 2>&1 | tail -5 && npm install -w server -D @types/express-session@^1.19.0 2>&1 | tail -3 && npm ls mongodb connect-mongo && git diff server/package.json && ls node_modules/connect-mongo/dist 2>/dev/null; cat node_modules/connect-mongo/package.json | grep -A15 '\""exports\""'"", ""description"": ""Install auth dependencies and check peer resolution""}"
+"25ae47e1-f5c8-4f33-a8af-46d05260d401:0","2026-11-14T07:25:06.492Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","npm warn install-scripts 2 packages have install scripts not yet covered by allowScripts:
+npm warn install-scripts   [redacted-email] (postinstall: node install.js)
+npm warn install-scripts   [redacted-email] (postinstall: node ./postinstall.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm warn install-scripts   [redacted-email] (postinstall: node ./postinstall.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+[redacted-email] C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project
+`-- @exquisite-chorus/[redacted-email] -> .\server
+  +-- [redacted-email]
+  | `-- [redacted-email]
+  +-- [redacted-email]
+  | `-- [redacted-email]
+  |   `-- [redacted-email]
+  `-- [redacted-email]
+    `-- [redacted-email] deduped
+
+diff --git a/server/package.json b/server/package.json
+index 8ed604a..b46f1d6 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -12,14 +12,19 @@
+     ""test:watch"": ""vitest""
+   },
+   ""dependencies"": {
++    ""bcryptjs"": ""^3.0.3"",
++    ""connect-mongo"": ""^6.0.0"",
+     ""dotenv"": ""^18.0.10"",
+     ""express"": ""^5.3.0"",
++    ""express-rate-limit"": ""^8.7.4"",
++    ""express-session"": ""^1.19.0"",
+     ""helmet"": ""^8.3.0"",
+     ""mongoose"": ""^9.12.1""
+   },
+   ""devDependencies"": {
+     ""@exquisite-chorus/shared"": ""*"",
+     ""@types/express"": ""^5.0.6"",
++    ""@types/express-session"": ""^1.19.0"",
+     ""@types/node"": ""^24.19.2"",
+     ""@types/supertest"": ""^7.2.1"",
+     ""mongodb-memory-server"": ""^11.3.0"",
+index.cjs
+index.cjs.map
+index.d.cts
+index.d.mts
+index.mjs
+index.mjs.map
+  ""exports"": {
+    ""."": {
+      ""import"": ""./dist/index.mjs"",
+      ""require"": ""./dist/index.cjs""
+    },
+    ""./package.json"": ""./package.json""
+  },
+  ""types"": ""./dist/index.d.cts"",
+  ""keywords"": [
+    ""connect"",
+    ""mongo"",
+    ""mongodb"",
+    ""session"",
+    ""express""
+  ],
+  ""contributors"": ["
+"879c4bad-9094-4447-971f-9a0d4ae03882:0","2026-11-14T07:25:09.894Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/node_modules\"" && sed -n '1,200p' connect-mongo/dist/index.d.mts | grep -n \""client\\|ttl\\|create\\|export\\|autoRemove\\|collectionName\\|close\"" ; grep -n \""ipKeyGenerator\\|keyGenerator\\|handler\\|standardHeaders\\|limit\\b\\|windowMs\\|validate\"" express-rate-limit/dist/index.d.mts | head -30"", ""description"": ""Inspect connect-mongo and rate-limit types""}"
+"ee210185-238f-448f-ae5a-0a69625c7f54:0","2026-11-14T07:25:10.051Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","18:declare const createKrupteinAdapter: (options: CryptoOptions) => CryptoAdapter;
+28:declare const createWebCryptoAdapter: ({
+43:  clientPromise?: Promise<MongoClient>;
+44:  client?: MongoClient;
+45:  collectionName?: string;
+48:  ttl?: number;
+51:  createAutoRemoveIdx?: boolean;
+52:  autoRemove?: 'native' | 'interval' | 'disabled';
+53:  autoRemoveInterval?: number;
+67:  createdAt?: Date;
+71:  private clientP;
+78:    collectionName,
+79:    ttl,
+81:    autoRemove,
+82:    autoRemoveInterval,
+90:  static create<U extends session.SessionData = session.SessionData>(options: ConnectMongoOptions<U>): MongoStore<U>;
+140:  close(): Promise<void>;
+143:export { type CryptoAdapter, type CryptoOptions, MongoStore, MongoStore as default, type WebCryptoAdapterOptions, createKrupteinAdapter, createWebCryptoAdapter };
+8: * If you write a custom keyGenerator that allows a fallback to IP address for
+9: * unauthenticated users, return ipKeyGenerator(req.ip) rather than just req.ip.
+20:export declare function ipKeyGenerator(ip: string, ipv6Subnet?: number | false): string;
+35:	 * See https://github.com/express-rate-limit/express-rate-limit/wiki/Error-Codes#err_erl_invalid_ip_address.
+45:	 * See https://github.com/express-rate-limit/express-rate-limit/wiki/Error-Codes#err_erl_permissive_trust_proxy.
+56:	 * See https://github.com/express-rate-limit/express-rate-limit/wiki/Error-Codes#err_erl_unset_trust_proxy.
+78:	 * Ensures a single store instance is not used with multiple express-rate-limit instances
+92:	 * Warns the user that the behaviour for `max: 0` / `limit: 0` is
+95:	 * @param limit {number} - The maximum number of hits per client.
+99:	limit(limit: number): void;
+137:	 * Checks the options.validate setting to ensure that only recognized
+145:	 * Checks to see if the instance was created inside of a request handler,
+152:	keyGeneratorIpFallback(keyGenerator?: ValueDeterminingMiddleware<string>): void;
+159:	windowMs(windowMs: number): void;
+201: * Express request handler that sends back a response when a client is
+211: * Event callback that is triggered on a client's first request that exceeds the limit
+232: * A modified Express request handler with the rate limit functions.
+368:	windowMs: number;
+373:	 * Can be the limit itself as a number or express middleware that parses
+374:	 * the request and then figures out the limit.
+378:	limit: number | ValueDeterminingMiddleware<number>;
+392:	 * Whether to send `X-RateLimit-*` headers with the rate limit and the number
+399:	 * Whether to enable support for the standardized rate limit headers (`RateLimit-*`).
+403:	standardHeaders: boolean | DraftHeadersVersion;
+408:	 * Defaults to `{limit}-in-{window}`.
+417:	 * That is still controlled by `windowMs`.
+423:	 * The name of the property on the request object to store the rate limit info.
+447:	keyGenerator: ValueDeterminingMiddleware<string>;
+449:	 * IPv6 subnet mask applied to IPv6 addresses in the default keyGenerator.
+460:	 * https://express-rate-limit.mintlify.app/reference/configuration#ipv6subnet."
+"a57b505e-38c7-4082-855c-cc89827127b1:0","2026-11-14T07:25:47.004Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/node_modules\"" && grep -n \""asPromise\\|getClient\"" mongoose/types/connection.d.ts; grep -n \""export\\|declare function\\|compare\\|hash\"" bcryptjs/umd/index.d.ts 2>/dev/null | head; ls bcryptjs; grep -n '\""types\""\\|exports' -A6 bcryptjs/package.json | head -30"", ""description"": ""Check mongoose and bcryptjs typings""}"
+"489ee9d1-ee6a-466c-a45d-ff205cc791fe:0","2026-11-14T07:25:47.217Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","79:    asPromise(): Promise<this>;
+149:    getClient(): mongodb.MongoClient;
+2:export = bcrypt;
+3:export as namespace bcrypt;
+LICENSE
+README.md
+bin/
+index.d.ts
+index.js
+package.json
+types.d.ts
+umd/
+31:  ""types"": ""umd/index.d.ts"",
+32:  ""exports"": {
+33-    ""."": {
+34-      ""import"": {
+35:        ""types"": ""./index.d.ts"",
+36-        ""default"": ""./index.js""
+37-      },
+38-      ""require"": {
+39:        ""types"": ""./umd/index.d.ts"",
+40-        ""default"": ""./umd/index.js""
+41-      }
+42-    }
+43-  },
+44-  ""bin"": {
+45-    ""bcrypt"": ""bin/bcrypt"""
+"dfe7483e-47bb-4181-b2aa-5d0406f1ce0c:0","2026-11-14T07:25:50.106Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/node_modules\"" && grep -n \""asPromise = \"" -A8 mongoose/lib/connection.js; grep -n \""_waitForConnect\\|Connection.prototype.getClient = \"" -A12 mongoose/lib/connection.js | head -40"", ""description"": ""Inspect mongoose asPromise implementation""}"
+"77d20807-13b4-4c49-b518-88827e67c02b:0","2026-11-14T07:25:50.257Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","1638:Connection.prototype.asPromise = async function asPromise() {
+1639-  try {
+1640-    await this.$initialConnection;
+1641-    return this;
+1642-  } catch (err) {
+1643-    throw _handleConnectionErrors(err);
+1644-  }
+1645-};
+1646-
+427:  await this._waitForConnect();
+428-
+429-  return this.db.createCollection(collection, options);
+430-};
+431-
+432-/**
+433- * _Requires MongoDB Server 8.0 or greater_. Executes bulk write operations across multiple models in a single operation.
+434- * You must specify the `model` for each operation: Mongoose will use `model` for casting and validation, as well as
+435- * determining which collection to apply the operation to.
+436- *
+437- * #### Example:
+438- *     const Test = mongoose.model('Test', new Schema({ name: String }));
+439- *
+--
+457:  await this._waitForConnect();
+458-  options = options || {};
+459-
+460-  const ordered = options.ordered == null ? true : options.ordered;
+461-  const asyncLocalStorage = this.base.transactionAsyncLocalStorage?.getStore();
+462-  if ((!options || !Object.hasOwn(options, 'session')) && asyncLocalStorage?.session != null) {
+463-    options = { ...options, session: asyncLocalStorage.session };
+464-  }
+465-
+466-  const now = this.base.now();
+467-
+468-  let res = null;
+469-  if (ordered) {
+--
+697:  await this._waitForConnect();
+698-
+699-  const session = this.client.startSession(options);
+700-  return session;
+701-};
+702-
+703-/**
+704- * Executes the wrapped async function
+705- * in a transaction. Mongoose will commit the transaction if the
+706- * async function executes successfully and attempt to retry if
+707- * there was a retriable error.
+708- *"
+"bb29eedd-a93f-458e-965d-fb8cb32df7ee:0","2026-11-14T07:25:59.536Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/node_modules/connect-mongo/dist\"" && grep -n \""clientP\\|collectionP\\|createIndex\\|catch\\|setAutoRemove\"" index.mjs | head -40"", ""description"": ""Inspect connect-mongo client handling""}"
+"86a33121-9d27-402b-991a-f3c5653e72bd:0","2026-11-14T07:25:59.654Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","148:	clientP;
+151:	collectionP;
+170:		assert(options.mongoUrl || options.clientPromise || options.client, ""You must provide either mongoUrl|clientPromise|client in options"");
+179:		let _clientP;
+180:		if (options.mongoUrl) _clientP = MongoClient.connect(options.mongoUrl, options.mongoOptions);
+181:		else if (options.clientPromise) _clientP = options.clientPromise;
+182:		else if (options.client) _clientP = Promise.resolve(options.client);
+184:		assert(!!_clientP, ""Client is null|undefined"");
+185:		this.clientP = _clientP;
+187:		this.collectionP = _clientP.then(async (con) => {
+189:			await this.setAutoRemove(collection);
+196:	setAutoRemove(collection) {
+201:				return collection.createIndex({ expires: 1 }, {
+207:				const runIntervalRemove = () => collection.deleteMany(removeQuery(), { writeConcern: { w: 0 } }).catch((err) => {
+232:		} catch (error) {
+241:		} catch {
+247:			} catch {
+273:				const sessionDoc = await (await this.collectionP).findOne({
+279:				} catch (error) {
+290:			} catch (error) {
+315:				const collection = await this.collectionP;
+327:			} catch (error) {
+349:				const collection = await this.collectionP;
+357:			} catch (error) {
+369:				const sessions = (await this.collectionP).find({ $or: [{ expires: { $exists: false } }, { expires: { $gt: /* @__PURE__ */ new Date() } }] });
+377:			} catch (error) {
+388:		this.collectionP.then((colleciton) => colleciton.deleteOne({ _id: this.computeStorageId(sid) }, { writeConcern: this.options.writeOperationOptions })).then(() => {
+391:		}).catch((err) => callback(err));
+398:		this.collectionP.then((collection) => collection.countDocuments()).then((c) => callback(null, c)).catch((err) => callback(err, 0));
+405:		this.collectionP.then((collection) => collection.deleteMany({}, { writeConcern: this.options.writeOperationOptions })).then(() => callback(null)).catch((err) => {
+423:		return this.clientP.then((c) => c.close());"
+"908a437d-3208-4a9d-b804-cdae66a17367:0","2026-11-14T07:26:46.497Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\test\\auth.test.ts"", ""content"": ""import bcrypt from 'bcryptjs'\nimport { Router } from 'express'\nimport mongoose from 'mongoose'\nimport request from 'supertest'\nimport { beforeAll, describe, expect, it } from 'vitest'\nimport { createApp, type AppDeps } from '../src/app.js'\nimport { requireAuth } from '../src/auth/guards.js'\nimport { SESSION_COOKIE } from '../src/auth/session.js'\nimport { User } from '../src/auth/user.model.js'\nimport { loadConfig } from '../src/config.js'\nimport { respond } from '../src/http.js'\n\nconst APP_ORIGIN = 'http://localhost:5173'\nconst config = loadConfig({ NODE_ENV: 'test', APP_ORIGIN })\n\n// A data route behind the guard, standing in for U4's recordings routes.\nfunction privateRouter(): Router {\n  const router = Router()\n  router.get('/private', requireAuth, (req, res) => {\n    respond(res, 200, 'OK', { userId: req.user?.id })\n  })\n  return router\n}\n\nfunction makeApp(deps: AppDeps = {}) {\n  return createApp(config, {\n    clientDist: null,\n    bcryptRounds: 4,\n    apiRouters: [privateRouter()],\n    ...deps,\n  })\n}\n\nconst alice = { email: '[redacted-email]', password: 'correct horse', displayName: 'Alice' }\n\nfunction sessionCookie(res: request.Response): string | undefined {\n  const raw = res.headers['set-cookie'] as unknown as string[] | undefined\n  return raw?.find((c) => c.startsWith(`${SESSION_COOKIE}=`))\n}\n\nfunction cookieValue(cookie: string | undefined): string | undefined {\n  return cookie?.split(';')[0]\n}\n\nbeforeAll(async () => {\n  // Build the unique email index so duplicate sign-ups hit a real E11000.\n  await User.init()\n})\n\ndescribe('POST /api/auth/signup', () => {\n  it('returns 201 with the user, no passwordHash, and a session cookie that /me accepts', async () => {\n    const agent = request.agent(makeApp())\n    const res = await agent.post('/api/auth/signup').send(alice)\n    expect(res.status).toBe(201)\n    expect(res.body.data).toEqual({\n      id: expect.any(String),\n      email: '[redacted-email]',\n      displayName: 'Alice',\n    })\n    expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|__v|_id/)\n\n    const cookie = sessionCookie(res)\n    expect(cookie).toBeDefined()\n    expect(cookie).toMatch(/HttpOnly/i)\n    expect(cookie).toMatch(/SameSite=Lax/i)\n    expect(cookie).not.toMatch(/Secure/i)\n\n    const me = await agent.get('/api/auth/me')\n    expect(me.status).toBe(200)\n    expect(me.body.data).toEqual(res.body.data)\n  })\n\n  it('persists the session in MongoDB', async () => {\n    const agent = request.agent(makeApp())\n    await agent.post('/api/auth/signup').send(alice).expect(201)\n    const sessions = await mongoose.connection.db!.collection('sessions').countDocuments()\n    expect(sessions).toBe(1)\n  })\n\n  it('returns 409 for an email that differs only in case', async () => {\n    const app = makeApp()\n    await request(app).post('/api/auth/signup').send({ ...alice, email: '[redacted-email]' }).expect(201)\n    const res = await request(app).post('/api/auth/signup').send({ ...alice, email: '[redacted-email]' })\n    expect(res.status).toBe(409)\n    expect(res.body.data).toBeNull()\n    expect(typeof res.body.message).toBe('string')\n  })\n\n  it('trims email and display name', async () => {\n    const res = await request(makeApp())\n      .post('/api/auth/signup')\n      .send({ ...alice, email: '  [redacted-email] ', displayName: '  Alice  ' })\n    expect(res.status).toBe(201)\n    expect(res.body.data.email).toBe('[redacted-email]')\n    expect(res.body.data.displayName).toBe('Alice')\n  })\n\n  it.each([\n    ['a 7-character password', { ...alice, password: '1234567' }],\n    ['a password over 128 characters', { ...alice, password: 'x'.repeat(129) }],\n    ['a malformed email', { ...alice, email: 'not-an-email' }],\n    ['a missing display name', { ...alice, displayName: '   ' }],\n    ['a display name over 50 characters', { ...alice, displayName: 'x'.repeat(51) }],\n    ['a non-string password', { ...alice, password: 12345678 }],\n  ])('rejects %s with a 400 envelope', async (_name, body) => {\n    const res = await request(makeApp()).post('/api/auth/signup').send(body)\n    expect(res.status).toBe(400)\n    expect(res.body.data).toBeNull()\n    expect(res.body.message.length).toBeGreaterThan(0)\n    expect(await User.countDocuments()).toBe(0)\n  })\n\n  it('stores a bcrypt hash that verifies and is not the plaintext', async () => {\n    await request(makeApp()).post('/api/auth/signup').send(alice).expect(201)\n    const user = await User.findOne({ email: alice.email }).lean()\n    expect(user?.passwordHash).toBeDefined()\n    expect(user?.passwordHash).not.toBe(alice.password)\n    expect(await bcrypt.compare(alice.password, user!.passwordHash)).toBe(true)\n    expect(await bcrypt.compare('wrong password', user!.passwordHash)).toBe(false)\n  })\n\n  it('rate-limits sign-ups from one IP: the 11th returns 429', async () => {\n    const app = makeApp()\n    for (let i = 0; i < 10; i++) {\n      await request(app)\n        .post('/api/auth/signup')\n        .send({ ...alice, email: `user${i}@example.com` })\n        .expect(201)\n    }\n    const res = await request(app)\n      .post('/api/auth/signup')\n      .send({ ...alice, email: '[redacted-email]' })\n    expect(res.status).toBe(429)\n    expect(res.body.data).toBeNull()\n    expect(typeof res.body.message).toBe('string')\n  })\n})\n\ndescribe('login, logout and /me', () => {\n  it('logs in with a cookie, logs out with 204, and /me then returns 401', async () => {\n    const app = makeApp()\n    await request(app).post('/api/auth/signup').send(alice).expect(201)\n\n    const agent = request.agent(app)\n    const login = await agent\n      .post('/api/auth/login')\n      .send({ email: alice.email, password: alice.password })\n    expect(login.status).toBe(200)\n    expect(login.body.data).toMatchObject({ email: alice.email, displayName: 'Alice' })\n    expect(login.body.data.passwordHash).toBeUndefined()\n    expect(sessionCookie(login)).toBeDefined()\n    expect((await agent.get('/api/auth/me')).status).toBe(200)\n\n    const logout = await agent.post('/api/auth/logout')\n    expect(logout.status).toBe(204)\n    expect(sessionCookie(logout)).toMatch(/Expires=Thu, 01 Jan 1970/)\n\n    const me = await agent.get('/api/auth/me')\n    expect(me.status).toBe(401)\n    expect(me.body.data).toBeNull()\n  })\n\n  it('accepts a login email in a different case', async () => {\n    const app = makeApp()\n    await request(app).post('/api/auth/signup').send(alice).expect(201)\n    const res = await request(app)\n      .post('/api/auth/login')\n      .send({ email: ' [redacted-email] ', password: alice.password })\n    expect(res.status).toBe(200)\n  })\n\n  it('returns identical 401 bodies for an unknown email and a wrong password', async () => {\n    const app = makeApp()\n    await request(app).post('/api/auth/signup').send(alice).expect(201)\n    const unknown = await request(app)\n      .post('/api/auth/login')\n      .send({ email: '[redacted-email]', password: alice.password })\n    const wrong = await request(app)\n      .post('/api/auth/login')\n      .send({ email: alice.email, password: 'wrong password' })\n    expect(unknown.status).toBe(401)\n    expect(wrong.status).toBe(401)\n    expect(unknown.body).toEqual(wrong.body)\n    expect(unknown.body.data).toBeNull()\n    expect(sessionCookie(unknown)).toBeUndefined()\n  })\n\n  it('returns 401 from /me without a cookie', async () => {\n    const res = await request(makeApp()).get('/api/auth/me')\n    expect(res.status).toBe(401)\n    expect(res.body.data).toBeNull()\n  })\n\n  it('returns 429 envelope on the 11th login attempt for one IP and email', async () => {\n    const app = makeApp()\n    const attempt = (email: string) =>\n      request(app).post('/api/auth/login').send({ email, password: 'wrong password' })\n    for (let i = 0; i < 10; i++) expect((await attempt(alice.email)).status).toBe(401)\n\n    const limited = await attempt(alice.email)\n    expect(limited.status).toBe(429)\n    expect(limited.body.data).toBeNull()\n    expect(typeof limited.body.message).toBe('string')\n    expect(limited.headers['ratelimit']).toBeDefined()\n\n    // The key is IP + email: same email in another case is the same key,\n    // a different email from the same IP is not.\n    expect((await attempt('[redacted-email]')).status).toBe(429)\n    expect((await attempt('[redacted-email]')).status).toBe(401)\n  })\n\n  it('regenerates the session ID on login', async () => {\n    const agent = request.agent(makeApp())\n    const signup = await agent.post('/api/auth/signup').send(alice)\n    const before = cookieValue(sessionCookie(signup))\n    const login = await agent\n      .post('/api/auth/login')\n      .send({ email: alice.email, password: alice.password })\n    const after = cookieValue(sessionCookie(login))\n    expect(before).toBeDefined()\n    expect(after).toBeDefined()\n    expect(after).not.toBe(before)\n    // Only the new session survives.\n    expect(await mongoose.connection.db!.collection('sessions').countDocuments()).toBe(1)\n  })\n})\n\ndescribe('requireAuth', () => {\n  it('returns 401 without a cookie', async () => {\n    const res = await request(makeApp()).get('/api/private')\n    expect(res.status).toBe(401)\n    expect(res.body.data).toBeNull()\n  })\n\n  it('attaches req.user for a signed-in request', async () => {\n    const agent = request.agent(makeApp())\n    const signup = await agent.post('/api/auth/signup').send(alice).expect(201)\n    const res = await agent.get('/api/private')\n    expect(res.status).toBe(200)\n    expect(res.body.data).toEqual({ userId: signup.body.data.id })\n  })\n\n  it('returns 401 when the session user no longer exists', async () => {\n    const agent = request.agent(makeApp())\n    await agent.post('/api/auth/signup').send(alice).expect(201)\n    await User.deleteMany({})\n    expect((await agent.get('/api/private')).status).toBe(401)\n    expect((await agent.get('/api/auth/me')).status).toBe(401)\n  })\n})\n\ndescribe('CSRF defenses', () => {\n  it('rejects logout with a foreign Origin with 403', async () => {\n    const res = await request(makeApp())\n      .post('/api/auth/logout')\n      .set('Origin', 'https://evil.example')\n    expect(res.status).toBe(403)\n    expect(res.body.data).toBeNull()\n  })\n\n  it('rejects signup with a foreign Origin with 403 and creates no user', async () => {\n    const res = await request(makeApp())\n      .post('/api/auth/signup')\n      .set('Origin', 'https://evil.example')\n      .send(alice)\n    expect(res.status).toBe(403)\n    expect(await User.countDocuments()).toBe(0)\n  })\n\n  it('allows the configured app origin', async () => {\n    const res = await request(makeApp()).post('/api/auth/logout').set('Origin', APP_ORIGIN)\n    expect(res.status).toBe(204)\n  })\n\n  it.each([\n    ['text/plain', JSON.stringify(alice)],\n    ['application/x-www-form-urlencoded', 'email=a%40b.co&password=12345678&displayName=A'],\n  ])('rejects a %s body with 415', async (type, body) => {\n    const res = await request(makeApp())\n      .post('/api/auth/signup')\n      .set('Content-Type', type)\n      .send(body)\n    expect(res.status).toBe(415)\n    expect(res.body.data).toBeNull()\n    expect(await User.countDocuments()).toBe(0)\n  })\n})\n\ndescribe('session cookie in production', () => {\n  it('is Secure behind a TLS-terminating proxy', async () => {\n    const prodConfig = loadConfig({\n      NODE_ENV: 'production',\n      MONGODB_URI: 'mongodb://unused.example/chorus',\n      SESSION_SECRET: 'x'.repeat(32),\n      APP_ORIGIN,\n      S3_BUCKET: 'chorus-audio',\n      AWS_REGION: 'us-east-2',\n    })\n    const app = createApp(prodConfig, { clientDist: null, bcryptRounds: 4 })\n    const res = await request(app)\n      .post('/api/auth/signup')\n      .set('X-Forwarded-Proto', 'https')\n      .send(alice)\n    expect(res.status).toBe(201)\n    expect(sessionCookie(res)).toMatch(/Secure/)\n  })\n})\n""}"
+"4ff1a5e1-46b9-4364-a6ed-0ac856b181a2:0","2026-11-14T07:26:46.524Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\test\auth.test.ts (file state is current in your context — no need to Read it back)"
+"a8442333-d17d-4b84-b732-cacbb9211a4f:0","2026-11-14T07:26:48.102Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server\"" && npx vitest run test/auth.test.ts 2>&1 | tail -20"", ""description"": ""Run auth tests to observe red""}"
+"666cca0e-0fc6-4dee-b3d9-c746ec6f262b:0","2026-11-14T07:26:50.298Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/auth.test.ts [ test/auth.test.ts ]
+Error: Cannot find module '../src/auth/guards.js' imported from C:/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server/test/auth.test.ts
+ ❯ test/auth.test.ts:7:1
+      5| import { beforeAll, describe, expect, it } from 'vitest'
+      6| import { createApp, type AppDeps } from '../src/app.js'
+      7| import { requireAuth } from '../src/auth/guards.js'
+       | ^
+      8| import { SESSION_COOKIE } from '../src/auth/session.js'
+      9| import { User } from '../src/auth/user.model.js'
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  01:26:49
+   Duration  738ms (setup 94%, transform 5%, worker 1%)"
+"207f9b9a-4c51-495e-9995-dde2ab82ae8b:0","2026-11-14T07:26:51.641Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","Red observed. Now the implementation."
+"f314b7dc-9d2a-4a41-a30d-f14c714a9154:0","2026-11-14T07:26:54.253Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && mkdir -p server/src/auth && cat > shared/src/auth.ts <<'EOF'\n// Auth request and response shapes for /api/auth/*.\n\n/** A user as the API returns it. Never carries the password hash. */\nexport interface PublicUser {\n  id: string\n  email: string\n  displayName: string\n}\n\n/** POST /api/auth/signup body. */\nexport interface SignUpRequest {\n  email: string\n  password: string\n  displayName: string\n}\n\n/** POST /api/auth/login body. */\nexport interface SignInRequest {\n  email: string\n  password: string\n}\nEOF\ncat >> shared/src/index.ts <<'EOF'\n\nexport type { PublicUser, SignInRequest, SignUpRequest } from './auth.js'\nEOF\ncat shared/src/index.ts"", ""description"": ""Add shared auth types""}"
+"7059e8eb-a028-469b-b102-84fed85a2bfd:0","2026-11-14T07:26:54.414Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","// API payload types shared by client and server.
+// Types only: this package has no build step and no runtime code, so consumers
+// must use `import type { ... } from '@exquisite-chorus/shared'`.
+
+/** Every API response body has this shape. */
+export interface ApiEnvelope<T> {
+  message: string
+  data: T
+}
+
+export type { PublicUser, SignInRequest, SignUpRequest } from './auth.js'"
+"2113db59-1139-469b-b8ae-7cebba69d40d:0","2026-11-14T07:27:00.059Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\auth\\user.model.ts"", ""content"": ""// User accounts. Email uniqueness is a real unique index (KTD13), and JSON\n// serialization never includes the password hash.\nimport type { PublicUser } from '@exquisite-chorus/shared'\nimport { model, Schema, type HydratedDocument } from 'mongoose'\n\nexport const DISPLAY_NAME_MAX = 50\n\nexport interface UserFields {\n  email: string\n  displayName: string\n  passwordHash: string\n}\n\nconst userSchema = new Schema<UserFields>(\n  {\n    email: { type: String, required: true, lowercase: true, trim: true, unique: true },\n    displayName: { type: String, required: true, trim: true, minlength: 1, maxlength: DISPLAY_NAME_MAX },\n    passwordHash: { type: String, required: true },\n  },\n  {\n    timestamps: true,\n    toJSON: {\n      versionKey: false,\n      transform: (_doc, ret): PublicUser => ({\n        id: String(ret._id),\n        email: ret.email,\n        displayName: ret.displayName,\n      }),\n    },\n  },\n)\n\nexport const User = model<UserFields>('User', userSchema)\n\nexport type UserDocument = HydratedDocument<UserFields>\n\nexport function toPublicUser(user: UserDocument): PublicUser {\n  return user.toJSON() as unknown as PublicUser\n}\n""}"
+"a074981e-54d2-453d-b17c-791bf6879875:0","2026-11-14T07:27:00.080Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\auth\user.model.ts (file state is current in your context — no need to Read it back)"
+"40d79bf7-2922-4f4b-bb86-2afc461252ff:0","2026-11-14T07:27:06.261Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\auth\\session.ts"", ""content"": ""// Server-side sessions (KTD3): express-session with a connect-mongo store that\n// reuses Mongoose's MongoClient, so the app holds one connection pool.\nimport MongoStore from 'connect-mongo'\nimport session, { type Store } from 'express-session'\nimport type { RequestHandler } from 'express'\nimport mongoose from 'mongoose'\nimport type { MongoClient } from 'mongodb'\nimport type { Config } from '../config.js'\n\ndeclare module 'express-session' {\n  interface SessionData {\n    userId?: string\n  }\n}\n\nexport const SESSION_COOKIE = 'ec.sid'\nexport const SESSION_TTL_SECONDS = 14 * 24 * 60 * 60\n\n/**\n * Mongoose's client once connected. Waits (never rejects) when the app is\n * built before the connection opens, as in tests or a dev server without a\n * database; session reads and writes simply wait for the connection.\n */\nfunction mongooseClient(): Promise<MongoClient> {\n  const connection = mongoose.connection\n  if (connection.readyState === mongoose.ConnectionStates.connected) {\n    return Promise.resolve(connection.getClient())\n  }\n  return new Promise((resolve) => {\n    connection.once('connected', () => resolve(connection.getClient()))\n  })\n}\n\nexport function createSessionStore(): Store {\n  return MongoStore.create({\n    clientPromise: mongooseClient(),\n    collectionName: 'sessions',\n    ttl: SESSION_TTL_SECONDS,\n  })\n}\n\n/** Cookie attributes shared by the session middleware and logout's clearCookie. */\nexport function sessionCookieOptions(config: Config) {\n  return {\n    httpOnly: true,\n    sameSite: 'lax' as const,\n    secure: config.nodeEnv === 'production',\n    path: '/',\n  }\n}\n\nexport function sessionMiddleware(config: Config, store: Store): RequestHandler {\n  return session({\n    name: SESSION_COOKIE,\n    secret: config.sessionSecret,\n    store,\n    resave: false,\n    saveUninitialized: false,\n    cookie: { ...sessionCookieOptions(config), maxAge: SESSION_TTL_SECONDS * 1000 },\n  })\n}\n""}"
+"466388af-ca46-4e54-8489-c89369436f1b:0","2026-11-14T07:27:06.284Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\auth\session.ts (file state is current in your context — no need to Read it back)"
+"8806f382-f21d-412a-8fbb-fc3f6f4f504f:0","2026-11-14T07:27:09.578Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server/src/auth\"" && sed -i \""/^import type { MongoClient } from 'mongodb'$/d\"" session.ts && sed -i \""s|^export const SESSION_COOKIE|type MongoClient = ReturnType<typeof mongoose.connection.getClient>\\n\\nexport const SESSION_COOKIE|\"" session.ts && sed -n 1,20p session.ts"", ""description"": ""Avoid direct mongodb type import""}"
+"9f22f13e-f1e0-4352-9f09-71052b46a862:0","2026-11-14T07:27:09.778Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","// Server-side sessions (KTD3): express-session with a connect-mongo store that
+// reuses Mongoose's MongoClient, so the app holds one connection pool.
+import MongoStore from 'connect-mongo'
+import session, { type Store } from 'express-session'
+import type { RequestHandler } from 'express'
+import mongoose from 'mongoose'
+import type { Config } from '../config.js'
+
+declare module 'express-session' {
+  interface SessionData {
+    userId?: string
+  }
+}
+
+type MongoClient = ReturnType<typeof mongoose.connection.getClient>
+
+export const SESSION_COOKIE = 'ec.sid'
+export const SESSION_TTL_SECONDS = 14 * 24 * 60 * 60
+
+/**
+[This command modified 1 file you've previously read: server\src\auth\session.ts. Call Read before editing.]"
+"7ab84863-da72-4a54-bc95-b3d5854ff34b:0","2026-11-14T07:27:18.395Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\auth\\guards.ts"", ""content"": ""// Request guards: the signed-in user check for data routes, and the CSRF\n// checks for state-changing API requests (KTD4).\nimport type { RequestHandler } from 'express'\nimport { HttpError, respond } from '../http.js'\nimport { User, type UserDocument } from './user.model.js'\n\ndeclare global {\n  // eslint-disable-next-line @typescript-eslint/no-namespace\n  namespace Express {\n    interface Request {\n      /** Set by requireAuth. */\n      user?: UserDocument\n    }\n  }\n}\n\nexport const NOT_SIGNED_IN = 'Not signed in'\n\n/** Loads the session's user onto req.user, or answers 401. */\nexport const requireAuth: RequestHandler = async (req, _res, next) => {\n  const userId = req.session?.userId\n  const user = userId ? await User.findById(userId) : null\n  if (!user) throw new HttpError(401, NOT_SIGNED_IN)\n  req.user = user\n  next()\n}\n\nconst STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])\n\n/**\n * Rejects state-changing requests whose Origin header names another site.\n * A missing Origin is allowed: browsers send it on cross-origin POSTs, so\n * its absence means a same-origin or non-browser client.\n */\nexport function originCheck(appOrigins: string[]): RequestHandler {\n  const allowed = new Set(appOrigins)\n  return (req, res, next) => {\n    const origin = req.get('Origin')\n    if (STATE_CHANGING.has(req.method) && origin !== undefined && !allowed.has(origin)) {\n      respond(res, 403, 'Request origin not allowed')\n      return\n    }\n    next()\n  }\n}\n\nfunction hasBody(req: Parameters<RequestHandler>[0]): boolean {\n  const length = req.get('Content-Length')\n  return req.get('Transfer-Encoding') !== undefined || (length !== undefined && length !== '0')\n}\n\n/**\n * State-changing requests that carry a body must send JSON. HTML forms can\n * only send urlencoded, multipart or text/plain cross-site without a\n * preflight, so this closes that path. Bodiless requests (logout) pass.\n */\nexport const requireJsonBody: RequestHandler = (req, res, next) => {\n  if (STATE_CHANGING.has(req.method) && hasBody(req) && !req.is('application/json')) {\n    respond(res, 415, 'Request body must be application/json')\n    return\n  }\n  next()\n}\n""}"
+"55d63a91-5a6e-4b20-bda4-acef7a7d9c39:0","2026-11-14T07:27:18.419Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\auth\guards.ts (file state is current in your context — no need to Read it back)"
+"c9f549f7-d8ab-47ee-840d-1eab36563f3c:0","2026-11-14T07:27:35.903Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\auth\\routes.ts"", ""content"": ""// /api/auth: sign up, sign in, sign out, and the current user.\nimport type { PublicUser, SignInRequest, SignUpRequest } from '@exquisite-chorus/shared'\nimport bcrypt from 'bcryptjs'\nimport { Router, type Request, type Response } from 'express'\nimport { ipKeyGenerator, rateLimit, type Options } from 'express-rate-limit'\nimport type { Config } from '../config.js'\nimport { HttpError, respond } from '../http.js'\nimport { requireAuth } from './guards.js'\nimport { sessionCookieOptions, SESSION_COOKIE } from './session.js'\nimport { DISPLAY_NAME_MAX, toPublicUser, User } from './user.model.js'\n\nexport const DEFAULT_BCRYPT_ROUNDS = 12\nexport const INVALID_CREDENTIALS = 'Invalid email or password'\n\nconst PASSWORD_MIN = 8\nconst PASSWORD_MAX = 128\nconst EMAIL_MAX = 254\nconst EMAIL_SHAPE = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/\nconst RATE_WINDOW_MS = 15 * 60 * 1000\nconst RATE_LIMIT = 10\n\nexport interface AuthRouterOptions {\n  /** bcrypt cost factor; tests lower it for speed. */\n  bcryptRounds?: number\n}\n\nfunction field(body: unknown, name: string): unknown {\n  return typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[name] : undefined\n}\n\nfunction normalizeEmail(raw: unknown): string | undefined {\n  return typeof raw === 'string' ? raw.trim().toLowerCase() : undefined\n}\n\nfunction parseSignUp(body: unknown): SignUpRequest {\n  const email = normalizeEmail(field(body, 'email'))\n  const password = field(body, 'password')\n  const rawName = field(body, 'displayName')\n  const displayName = typeof rawName === 'string' ? rawName.trim() : ''\n\n  if (!email || email.length > EMAIL_MAX || !EMAIL_SHAPE.test(email)) {\n    throw new HttpError(400, 'Enter a valid email address')\n  }\n  if (typeof password !== 'string' || password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) {\n    throw new HttpError(400, `Password must be ${PASSWORD_MIN} to ${PASSWORD_MAX} characters`)\n  }\n  if (displayName.length === 0 || displayName.length > DISPLAY_NAME_MAX) {\n    throw new HttpError(400, `Display name must be 1 to ${DISPLAY_NAME_MAX} characters`)\n  }\n  return { email, password, displayName }\n}\n\nfunction parseSignIn(body: unknown): SignInRequest {\n  const email = normalizeEmail(field(body, 'email'))\n  const password = field(body, 'password')\n  if (!email || typeof password !== 'string' || password.length === 0) {\n    throw new HttpError(400, 'Email and password are required')\n  }\n  return { email, password }\n}\n\n/** Starts a fresh session (new ID, defeating fixation) for the given user. */\nasync function signIn(req: Request, userId: string): Promise<void> {\n  await new Promise<void>((resolve, reject) => {\n    req.session.regenerate((err: unknown) => (err ? reject(err) : resolve()))\n  })\n  req.session.userId = userId\n  await new Promise<void>((resolve, reject) => {\n    req.session.save((err: unknown) => (err ? reject(err) : resolve()))\n  })\n}\n\nfunction limiterOptions(): Partial<Options> {\n  return {\n    windowMs: RATE_WINDOW_MS,\n    limit: RATE_LIMIT,\n    standardHeaders: 'draft-8',\n    legacyHeaders: false,\n    handler: (_req: Request, res: Response) => {\n      respond(res, 429, 'Too many attempts. Try again in a few minutes.')\n    },\n  }\n}\n\nexport function authRouter(config: Config, options: AuthRouterOptions = {}): Router {\n  const rounds = options.bcryptRounds ?? DEFAULT_BCRYPT_ROUNDS\n  const cookieOptions = sessionCookieOptions(config)\n  // Compared against when the email is unknown, so both failure paths do the\n  // same bcrypt work and take about the same time.\n  const dummyHash = bcrypt.hash('timing-equalizer', rounds)\n\n  // Limiters live per router, so every app (and every test) has its own store.\n  const loginLimiter = rateLimit({\n    ...limiterOptions(),\n    keyGenerator: (req) =>\n      `${ipKeyGenerator(req.ip ?? '')}|${normalizeEmail(field(req.body, 'email')) ?? ''}`,\n  })\n  const signupLimiter = rateLimit(limiterOptions())\n\n  const router = Router()\n\n  router.post('/auth/signup', signupLimiter, async (req, res) => {\n    const input = parseSignUp(req.body)\n    const passwordHash = await bcrypt.hash(input.password, rounds)\n    let user\n    try {\n      user = await User.create({ email: input.email, displayName: input.displayName, passwordHash })\n    } catch (err) {\n      if (typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 11000) {\n        throw new HttpError(409, 'An account with that email already exists')\n      }\n      throw err\n    }\n    await signIn(req, user.id)\n    respond<PublicUser>(res, 201, 'Account created', toPublicUser(user))\n  })\n\n  router.post('/auth/login', loginLimiter, async (req, res) => {\n    const input = parseSignIn(req.body)\n    const user = await User.findOne({ email: input.email })\n    const valid = await bcrypt.compare(input.password, user?.passwordHash ?? (await dummyHash))\n    if (!user || !valid) throw new HttpError(401, INVALID_CREDENTIALS)\n    await signIn(req, user.id)\n    respond<PublicUser>(res, 200, 'Signed in', toPublicUser(user))\n  })\n\n  router.post('/auth/logout', async (req, res) => {\n    await new Promise<void>((resolve, reject) => {\n      req.session.destroy((err: unknown) => (err ? reject(err) : resolve()))\n    })\n    res.clearCookie(SESSION_COOKIE, cookieOptions)\n    res.status(204).end()\n  })\n\n  router.get('/auth/me', requireAuth, (req, res) => {\n    respond<PublicUser>(res, 200, 'OK', toPublicUser(req.user!))\n  })\n\n  return router\n}\n""}"
+"d5443cbf-5691-4e32-8e71-aa490d7f167a:0","2026-11-14T07:27:35.925Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\auth\routes.ts (file state is current in your context — no need to Read it back)"
+"93844278-210e-41dd-a654-b841e1cf21b0:0","2026-11-14T07:27:40.442Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server/src/auth\"" && python - <<'EOF'\np='routes.ts'\ns=open(p,encoding='utf8').read()\ns=s.replace(\""\""\""  const dummyHash = bcrypt.hash('timing-equalizer', rounds)\n\""\""\"",\""\""\""  let dummyHash: Promise<string> | undefined\n  const timingHash = () => (dummyHash ??= bcrypt.hash('timing-equalizer', rounds))\n\""\""\"")\ns=s.replace(\""(await dummyHash))\"",\""(await timingHash()))\"")\nopen(p,'w',encoding='utf8').write(s)\nEOF\ngrep -n \""timingHash\\|dummyHash\"" routes.ts"", ""description"": ""Make timing-equalizer hash lazy""}"
+"064796b5-b5a7-4c24-a998-c90f5b327056:0","2026-11-14T07:27:40.617Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","90:  let dummyHash: Promise<string> | undefined
+91:  const timingHash = () => (dummyHash ??= bcrypt.hash('timing-equalizer', rounds))
+122:    const valid = await bcrypt.compare(input.password, user?.passwordHash ?? (await timingHash()))"
+"31edb327-2523-4255-8788-0eb7f8031a15:0","2026-11-14T07:27:41.304Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","Now wire into app.ts."
+"8c99d12c-7c72-4243-a756-2444577937de:0","2026-11-14T07:27:46.948Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server/src\"" && python - <<'EOF'\np='app.ts'\ns=open(p,encoding='utf8').read()\ndef rep(a,b):\n    global s\n    assert a in s, a\n    s=s.replace(a,b,1)\nrep(\""\""\""// supertest. Everything stateful (routers, and later rate limiters) is created\n// per call; nothing leaks between app instances.\""\""\"",\""\""\""// supertest. Everything stateful (routers, rate limiters, the session store) is\n// created per call; nothing leaks between app instances.\""\""\"")\nrep(\""\""\""import helmet from 'helmet'\n\""\""\"",\""\""\""import type { Store } from 'express-session'\nimport helmet from 'helmet'\nimport { originCheck, requireJsonBody } from './auth/guards.js'\nimport { authRouter } from './auth/routes.js'\nimport { createSessionStore, sessionMiddleware } from './auth/session.js'\n\""\""\"")\nrep(\""\""\""  apiRouters?: Router[]\n}\""\""\"",\""\""\""  apiRouters?: Router[]\n  /** Session store. Defaults to connect-mongo on Mongoose's connection. */\n  sessionStore?: Store\n  /** bcrypt cost factor. Defaults to 12; tests pass a low value for speed. */\n  bcryptRounds?: number\n}\""\""\"")\nrep(\""\""\""  app.use(express.json())\n\n  // API: feature routers (auth, recordings) mount here in later units.\n  app.use('/api', healthRouter())\n\""\""\"",\""\""\""\n  // CSRF defenses (KTD4) run before any body parsing or session work.\n  app.use('/api', originCheck(config.appOrigins), requireJsonBody)\n  app.use(express.json())\n  app.use('/api', sessionMiddleware(config, deps.sessionStore ?? createSessionStore()))\n\n  // API: built-in routers, then feature routers (recordings mounts in U4).\n  app.use('/api', healthRouter())\n  app.use('/api', authRouter(config, { bcryptRounds: deps.bcryptRounds }))\n\""\""\"")\nopen(p,'w',encoding='utf8').write(s)\nEOF\ncd .. && npx vitest run 2>&1 | tail -40"", ""description"": ""Wire auth into createApp and run tests""}"
+"b3d82abf-8689-455a-a7b4-e93bebacde35:0","2026-11-14T07:28:07.763Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","+ Received
+
+- 1
++ 2
+
+ ❯ test/auth.test.ts:77:22
+     75|     await agent.post('/api/auth/signup').send(alice).expect(201)
+     76|     const sessions = await mongoose.connection.db!.collection('session…
+     77|     expect(sessions).toBe(1)
+       |                      ^
+     78|   })
+     79|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/auth.test.ts > login, logout and /me > regenerates the session ID on login
+AssertionError: expected 20 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 20
+
+ ❯ test/auth.test.ts:224:83
+    222|     expect(after).not.toBe(before)
+    223|     // Only the new session survives.
+    224|     expect(await mongoose.connection.db!.collection('sessions').countD…
+       |                                                                                   ^
+    225|   })
+    226| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 44 passed (46)
+   Start at  01:27:48
+   Duration  19.29s (tests 96%, setup 2%, import 1%)"
+"4756fbf4-e74c-4155-895d-e4e463b40f7d:0","2026-11-14T07:28:14.213Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server\"" && python - <<'EOF'\np='test/setup.ts'\ns=open(p,encoding='utf8').read()\na=\""\""\""afterEach(async () => {\n  const { collections } = mongoose.connection\n  await Promise.all(Object.values(collections).map((c) => c.deleteMany({})))\n})\""\""\""\nb=\""\""\""// Every collection in the database, not just Mongoose models': the session\n// store (connect-mongo) writes `sessions` through the raw driver.\nafterEach(async () => {\n  const collections = await mongoose.connection.db!.collections()\n  await Promise.all(collections.map((c) => c.deleteMany({})))\n})\""\""\""\nassert a in s\ns=s.replace(a,b)\nopen(p,'w',encoding='utf8').write(s)\nEOF\nnpx vitest run 2>&1 | tail -8"", ""description"": ""Clear all collections between tests and rerun""}"
+"5ba8279b-dc9e-4168-a0c6-12fa28d81115:0","2026-11-14T07:28:17.181Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result"," RUN  v5.1.0 C:/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server
+
+
+ Test Files  2 passed (2)
+      Tests  46 passed (46)
+   Start at  01:28:15
+   Duration  1.48s (tests 49%, setup 33%, import 14%, transform 3%)"
+"31c1ede3-2d14-4259-b6d5-7c278833744f:0","2026-11-14T07:28:19.625Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && (cd server && npx vitest run 2>&1 | grep -i \""warn\\|error\\|unhandled\"" | head); npm run lint 2>&1 | tail -15; npm run typecheck 2>&1 | tail -15"", ""description"": ""Check warnings, lint and typecheck""}"
+"9baf3e58-28cd-495b-89f5-c391754bd445:0","2026-11-14T07:28:26.834Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","> [redacted-email] lint
+> oxlint
+
+> [redacted-email] typecheck
+> npm run typecheck --workspaces
+
+
+> @exquisite-chorus/[redacted-email] typecheck
+> tsc --noEmit -p .
+
+
+> @exquisite-chorus/[redacted-email] typecheck
+> tsc --noEmit -p .
+
+
+> @exquisite-chorus/[redacted-email] typecheck
+> tsc --noEmit -p ."
+"efe18a2c-9fdf-4603-a501-f7b14c1d05e9:0","2026-11-14T07:28:29.400Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && npm run lint >/dev/null 2>&1; echo lint=$?; npx oxlint 2>&1 | tail -3; npm test 2>&1 | grep -E \""Test Files|Tests |FAIL\""; echo test=${PIPESTATUS[0]}; npm run build 2>&1 | tail -6; echo build=$?; ls server/dist/auth"", ""description"": ""Run lint, test, build with exit codes""}"
+"96de278c-c8f1-447d-9427-9c2de674d53e:0","2026-11-14T07:28:37.673Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","lint=0
+ Test Files  2 passed (2)
+      Tests  46 passed (46)
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+test=0
+
+[32m✓ built in 90ms[39m
+
+> @exquisite-chorus/[redacted-email] build
+> tsc -p tsconfig.build.json
+
+build=0
+guards.js
+guards.js.map
+routes.js
+routes.js.map
+session.js
+session.js.map
+user.model.js
+user.model.js.map"
+"aa91ffdd-a789-40a3-90bb-9059df8ad19c:0","2026-11-14T07:28:41.818Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server\"" && node -e \""const {createApp}=await import('./dist/app.js');const {loadConfig}=await import('./dist/config.js');const a=createApp(loadConfig({}),{clientDist:null});console.log(typeof a);process.exit(0)\"" --input-type=module; git -C .. status --short"", ""description"": ""Smoke-load compiled app and show changes""}"
+"ad4b68b3-5db3-47be-94ec-ff3cd5f28da9:0","2026-11-14T07:28:42.362Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","function
+ M llm_logs_raburt3.csv
+ M package-lock.json
+ M server/package.json
+ M server/src/app.ts
+ M server/test/setup.ts
+ M shared/src/index.ts
+?? server/src/auth/
+?? server/test/auth.test.ts
+?? shared/src/auth.ts"
+"8eb549a4-f890-48b4-9f74-3527f202b3d0:0","2026-11-14T07:29:02.268Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","U3 (authentication) is in place and all four gates pass: lint, typecheck, tests and build. Nothing is staged or committed. I left `server/src/index.ts` unchanged: it connects to Mongo before calling `createApp`, so the default session store picks up the live client.
+
+**(a) Files**
+- **New:**
+  - `server/src/auth/user.model.ts`
+  - `server/src/auth/session.ts`
+  - `server/src/auth/guards.ts`
+  - `server/src/auth/routes.ts`
+  - `shared/src/auth.ts`
+  - `server/test/auth.test.ts`
+- **Changed:**
+  - `server/src/app.ts`: wires in the auth pieces and adds `sessionStore?` and `bcryptRounds?` to `AppDeps`.
+  - `shared/src/index.ts`: re-exports the auth types.
+  - `server/package.json` and `package-lock.json`: new dependencies are `express-session` ^1.19.0, `connect-mongo` ^6.0.0, `express-rate-limit` ^8.7.4 and `bcryptjs` ^3.0.3; `@types/express-session` ^1.19.0 is a dev dependency.
+  - `server/test/setup.ts`: a U2 file (see deviation 1).
+
+**(b) Evidence**
+- **Behavior changed:**
+  - **Endpoints:** `POST /api/auth/signup` (201), `/login` (200, rate limited), `/logout` (204), and `GET /api/auth/me` (200 or 401).
+  - **Sessions:** `express-session` with a `connect-mongo` store (14-day TTL) that reuses Mongoose's client. The cookie is `ec.sid`, httpOnly, SameSite=Lax, Secure only in production, and the session ID is regenerated on signup and login.
+  - **Rate limits:** created per router. Login allows 10 per 15 minutes, keyed on `ipKeyGenerator(req.ip)` plus the lowercased email. Signup has the same limit keyed by IP.
+  - **CSRF checks under `/api`:** an `Origin` not in the allowed list gets 403. A state-changing request with a non-JSON body gets 415. Logout has no body, so it passes.
+  - **Passwords:** bcryptjs at cost 12, or 4 in tests via deps. Unknown email and wrong password both return 401 ""Invalid email or password"", and the unknown-email path also runs a bcrypt compare so both take about the same time.
+  - **`requireAuth`:** exported for U4. It checks the user still exists, sets a typed `req.user`, and otherwise returns 401. The `SessionData.userId` type is declared too.
+- **Tests added** in `auth.test.ts`, 33 in total:
+  - **Signup:** returns 201 with the user, no hash and a cookie, and `/me` then works; the session is stored in MongoDB; a case-variant email gives 409; email and display name are trimmed; six 400 validation cases, including a 7-character password; the stored hash verifies with bcryptjs and is not the plaintext; the 11th signup gets 429.
+  - **Login, logout and `/me`:** login, logout (204, cookie cleared), then `/me` gives 401; login ignores email case; unknown email and wrong password give identical 401 bodies; `/me` without a cookie gives 401; the 11th login gets 429, with headers and keyed on IP plus email; the session ID changes between signup and login.
+  - **`requireAuth`:** 401 without a cookie; `req.user` is set when signed in; 401 once the user is deleted.
+  - **CSRF:** a foreign Origin gets 403 on logout and on signup; the allowed origin passes; `text/plain` and urlencoded bodies get 415.
+  - **Production cookie:** Secure behind a TLS proxy.
+- **Red observed:** before any implementation, `vitest run test/auth.test.ts` failed with `Cannot find module '../src/auth/guards.js'` (1 file failed, no tests ran). The first green attempt then showed 2 failures: the sessions collection held 2 and 20 documents instead of 1, because it was never cleared between tests. That led to deviation 1.
+- **Commands (all exit 0):**
+  - `npm run lint`: clean.
+  - `npm run typecheck`: shared, server and client all clean.
+  - `npm test`: server 46/46 across 2 files, client 1/1.
+  - `npm run build`: client and server built, and `server/dist/auth/*` is emitted. The compiled `dist/app.js` also loads under plain node.
+- **Peer resolution:** `[redacted-email]` asks for `mongodb >=5.0.0`. `npm ls mongodb` shows `connect-mongo -> [redacted-email]` and `[redacted-email] -> [redacted-email] deduped`, so both share one driver with no peer warnings. `mongodb-memory-server` has its own `[redacted-email]`, which only matters to tests.
+
+**Deviations**
+1. **`server/test/setup.ts`:** it now clears every collection in the database with `db.collections()`, instead of only Mongoose's model collections. connect-mongo writes `sessions` through the raw driver, so session documents were leaking between tests.
+2. **Default session store:** I used connect-mongo's `clientPromise` instead of `client: getClient()`. The promise resolves to Mongoose's client once the connection is open and never rejects. This is needed because `createApp` can run before Mongoose connects: `app.test.ts` builds apps at collection time, and in dev the server starts even if the database is down. `getClient()` would return nothing in those cases.
+3. **The CSRF checks:** they live in `guards.ts` and are mounted in `app.ts` before `express.json()`, rather than inside the auth router, so they also cover U4's routes.
+4. **Smaller choices:**
+   - The cookie gets `maxAge` equal to the 14-day TTL, so a login survives a browser restart.
+   - The 429 response sets the `RateLimit` header in the `draft-8` format.
+   - Signup has the same 10-per-15-minutes limit as login. Raise it if many demo users will sign up from one shared IP.
+   - Passwords may be up to 128 characters, but bcrypt only uses the first 72 bytes."
+"fd4f5488-936a-4405-b567-d7a651f2505c:0","2026-11-14T07:29:02.313Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","prompt","<task-notification>
+<task-id>a46d94bdc57033d27</task-id>
+<tool-use-id>toolu_01DgnRNTUGUwFyaAJYwkM89k</tool-use-id>
+<output-file>C:\Users\User\AppData\Local\Temp\claude\8eeb967062a64003\e98c1602-5de1-48cb-b5cf-ad09189e70d7\tasks\a46d94bdc57033d27.output</output-file>
+<status>completed</status>
+<summary>Agent ""Implement U3 authentication"" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>U3 (authentication) is in place and all four gates pass: lint, typecheck, tests and build. Nothing is staged or committed. I left `server/src/index.ts` unchanged: it connects to Mongo before calling `createApp`, so the default session store picks up the live client.
+
+**(a) Files**
+- **New:**
+  - `server/src/auth/user.model.ts`
+  - `server/src/auth/session.ts`
+  - `server/src/auth/guards.ts`
+  - `server/src/auth/routes.ts`
+  - `shared/src/auth.ts`
+  - `server/test/auth.test.ts`
+- **Changed:**
+  - `server/src/app.ts`: wires in the auth pieces and adds `sessionStore?` and `bcryptRounds?` to `AppDeps`.
+  - `shared/src/index.ts`: re-exports the auth types.
+  - `server/package.json` and `package-lock.json`: new dependencies are `express-session` ^1.19.0, `connect-mongo` ^6.0.0, `express-rate-limit` ^8.7.4 and `bcryptjs` ^3.0.3; `@types/express-session` ^1.19.0 is a dev dependency.
+  - `server/test/setup.ts`: a U2 file (see deviation 1).
+
+**(b) Evidence**
+- **Behavior changed:**
+  - **Endpoints:** `POST /api/auth/signup` (201), `/login` (200, rate limited), `/logout` (204), and `GET /api/auth/me` (200 or 401).
+  - **Sessions:** `express-session` with a `connect-mongo` store (14-day TTL) that reuses Mongoose's client. The cookie is `ec.sid`, httpOnly, SameSite=Lax, Secure only in production, and the session ID is regenerated on signup and login.
+  - **Rate limits:** created per router. Login allows 10 per 15 minutes, keyed on `ipKeyGenerator(req.ip)` plus the lowercased email. Signup has the same limit keyed by IP.
+  - **CSRF checks under `/api`:** an `Origin` not in the allowed list gets 403. A state-changing request with a non-JSON body gets 415. Logout has no body, so it passes.
+  - **Passwords:** bcryptjs at cost 12, or 4 in tests via deps. Unknown email and wrong password both return 401 ""Invalid email or password"", and the unknown-email path also runs a bcrypt compare so both take about the same time.
+  - **`requireAuth`:** exported for U4. It checks the user still exists, sets a typed `req.user`, and otherwise returns 401. The `SessionData.userId` type is declared too.
+- **Tests added** in `auth.test.ts`, 33 in total:
+  - **Signup:** returns 201 with the user, no hash and a cookie, and `/me` then works; the session is stored in MongoDB; a case-variant email gives 409; email and display name are trimmed; six 400 validation cases, including a 7-character password; the stored hash verifies with bcryptjs and is not the plaintext; the 11th signup gets 429.
+  - **Login, logout and `/me`:** login, logout (204, cookie cleared), then `/me` gives 401; login ignores email case; unknown email and wrong password give identical 401 bodies; `/me` without a cookie gives 401; the 11th login gets 429, with headers and keyed on IP plus email; the session ID changes between signup and login.
+  - **`requireAuth`:** 401 without a cookie; `req.user` is set when signed in; 401 once the user is deleted.
+  - **CSRF:** a foreign Origin gets 403 on logout and on signup; the allowed origin passes; `text/plain` and urlencoded bodies get 415.
+  - **Production cookie:** Secure behind a TLS proxy.
+- **Red observed:** before any implementation, `vitest run test/auth.test.ts` failed with `Cannot find module '../src/auth/guards.js'` (1 file failed, no tests ran). The first green attempt then showed 2 failures: the sessions collection held 2 and 20 documents instead of 1, because it was never cleared between tests. That led to deviation 1.
+- **Commands (all exit 0):**
+  - `npm run lint`: clean.
+  - `npm run typecheck`: shared, server and client all clean.
+  - `npm test`: server 46/46 across 2 files, client 1/1.
+  - `npm run build`: client and server built, and `server/dist/auth/*` is emitted. The compiled `dist/app.js` also loads under plain node.
+- **Peer resolution:** `[redacted-email]` asks for `mongodb &gt;=5.0.0`. `npm ls mongodb` shows `connect-mongo -&gt; [redacted-email]` and `[redacted-email] -&gt; [redacted-email] deduped`, so both share one driver with no peer warnings. `mongodb-memory-server` has its own `[redacted-email]`, which only matters to tests.
+
+**Deviations**
+1. **`server/test/setup.ts`:** it now clears every collection in the database with `db.collections()`, instead of only Mongoose's model collections. connect-mongo writes `sessions` through the raw driver, so session documents were leaking between tests.
+2. **Default session store:** I used connect-mongo's `clientPromise` instead of `client: getClient()`. The promise resolves to Mongoose's client once the connection is open and never rejects. This is needed because `createApp` can run before Mongoose connects: `app.test.ts` builds apps at collection time, and in dev the server starts even if the database is down. `getClient()` would return nothing in those cases.
+3. **The CSRF checks:** they live in `guards.ts` and are mounted in `app.ts` before `express.json()`, rather than inside the auth router, so they also cover U4's routes.
+4. **Smaller choices:**
+   - The cookie gets `maxAge` equal to the 14-day TTL, so a login survives a browser restart.
+   - The 429 response sets the `RateLimit` header in the `draft-8` format.
+   - Signup has the same 10-per-15-minutes limit as login. Raise it if many demo users will sign up from one shared IP.
+   - Passwords may be up to 128 characters, but bcrypt only uses the first 72 bytes.</result>
+<usage><subagent_tokens>86561</subagent_tokens><tool_uses>24</tool_uses><duration_ms>263200</duration_ms></usage>
+</task-notification>"
+"76385387-59ef-42cf-9154-18c9b3ebac66:0","2026-11-14T07:29:06.387Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\""; git status --short; (npm run lint && npm run typecheck && npm test && npm run build) > \""$TEMP/u3.log\"" 2>&1; echo \""gates exit=$?\""; grep -E \""Tests \"" \""$TEMP/u3.log\""; cat server/src/auth/guards.ts; sed -n 1,80p server/src/auth/routes.ts"", ""description"": ""Run gates and review U3 guards and routes"", ""timeout"": 300000}"
+"afbda296-5d87-42ba-9b23-47ee69f32b6b:0","2026-11-14T07:29:17.258Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result"," M llm_logs_raburt3.csv
+ M package-lock.json
+ M server/package.json
+ M server/src/app.ts
+ M server/test/setup.ts
+ M shared/src/index.ts
+?? server/src/auth/
+?? server/test/auth.test.ts
+?? shared/src/auth.ts
+gates exit=0
+      Tests  46 passed (46)
+      Tests  1 passed (1)
+// Request guards: the signed-in user check for data routes, and the CSRF
+// checks for state-changing API requests (KTD4).
+import type { RequestHandler } from 'express'
+import { HttpError, respond } from '../http.js'
+import { User, type UserDocument } from './user.model.js'
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      /** Set by requireAuth. */
+      user?: UserDocument
+    }
+  }
+}
+
+export const NOT_SIGNED_IN = 'Not signed in'
+
+/** Loads the session's user onto req.user, or answers 401. */
+export const requireAuth: RequestHandler = async (req, _res, next) => {
+  const userId = req.session?.userId
+  const user = userId ? await User.findById(userId) : null
+  if (!user) throw new HttpError(401, NOT_SIGNED_IN)
+  req.user = user
+  next()
+}
+
+const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/**
+ * Rejects state-changing requests whose Origin header names another site.
+ * A missing Origin is allowed: browsers send it on cross-origin POSTs, so
+ * its absence means a same-origin or non-browser client.
+ */
+export function originCheck(appOrigins: string[]): RequestHandler {
+  const allowed = new Set(appOrigins)
+  return (req, res, next) => {
+    const origin = req.get('Origin')
+    if (STATE_CHANGING.has(req.method) && origin !== undefined && !allowed.has(origin)) {
+      respond(res, 403, 'Request origin not allowed')
+      return
+    }
+    next()
+  }
+}
+
+function hasBody(req: Parameters<RequestHandler>[0]): boolean {
+  const length = req.get('Content-Length')
+  return req.get('Transfer-Encoding') !== undefined || (length !== undefined && length !== '0')
+}
+
+/**
+ * State-changing requests that carry a body must send JSON. HTML forms can
+ * only send urlencoded, multipart or text/plain cross-site without a
+ * preflight, so this closes that path. Bodiless requests (logout) pass.
+ */
+export const requireJsonBody: RequestHandler = (req, res, next) => {
+  if (STATE_CHANGING.has(req.method) && hasBody(req) && !req.is('application/json')) {
+    respond(res, 415, 'Request body must be application/json')
+    return
+  }
+  next()
+}
+// /api/auth: sign up, sign in, sign out, and the current user.
+import type { PublicUser, SignInRequest, SignUpRequest } from '@exquisite-chorus/shared'
+import bcrypt from 'bcryptjs'
+import { Router, type Request, type Response } from 'express'
+import { ipKeyGenerator, rateLimit, type Options } from 'express-rate-limit'
+import type { Config } from '../config.js'
+import { HttpError, respond } from '../http.js'
+import { requireAuth } from './guards.js'
+import { sessionCookieOptions, SESSION_COOKIE } from './session.js'
+import { DISPLAY_NAME_MAX, toPublicUser, User } from './user.model.js'
+
+export const DEFAULT_BCRYPT_ROUNDS = 12
+export const INVALID_CREDENTIALS = 'Invalid email or password'
+
+const PASSWORD_MIN = 8
+const PASSWORD_MAX = 128
+const EMAIL_MAX = 254
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const RATE_WINDOW_MS = 15 * 60 * 1000
+const RATE_LIMIT = 10
+
+export interface AuthRouterOptions {
+  /** bcrypt cost factor; tests lower it for speed. */
+  bcryptRounds?: number
+}
+
+function field(body: unknown, name: string): unknown {
+  return typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[name] : undefined
+}
+
+function normalizeEmail(raw: unknown): string | undefined {
+  return typeof raw === 'string' ? raw.trim().toLowerCase() : undefined
+}
+
+function parseSignUp(body: unknown): SignUpRequest {
+  const email = normalizeEmail(field(body, 'email'))
+  const password = field(body, 'password')
+  const rawName = field(body, 'displayName')
+  const displayName = typeof rawName === 'string' ? rawName.trim() : ''
+
+  if (!email || email.length > EMAIL_MAX || !EMAIL_SHAPE.test(email)) {
+    throw new HttpError(400, 'Enter a valid email address')
+  }
+  if (typeof password !== 'string' || password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) {
+    throw new HttpError(400, `Password must be ${PASSWORD_MIN} to ${PASSWORD_MAX} characters`)
+  }
+  if (displayName.length === 0 || displayName.length > DISPLAY_NAME_MAX) {
+    throw new HttpError(400, `Display name must be 1 to ${DISPLAY_NAME_MAX} characters`)
+  }
+  return { email, password, displayName }
+}
+
+function parseSignIn(body: unknown): SignInRequest {
+  const email = normalizeEmail(field(body, 'email'))
+  const password = field(body, 'password')
+  if (!email || typeof password !== 'string' || password.length === 0) {
+    throw new HttpError(400, 'Email and password are required')
+  }
+  return { email, password }
+}
+
+/** Starts a fresh session (new ID, defeating fixation) for the given user. */
+async function signIn(req: Request, userId: string): Promi
+[... truncated, 5592 characters total]"
