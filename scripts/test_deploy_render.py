@@ -1,4 +1,5 @@
-"""Tests for deploy_render.py. No network: urlopen is patched to fail.
+"""Tests for deploy_render.py. No network: urlopen is patched to fail, and the
+live-path tests swap in a fake Render API.
 
 Run with:  python -m unittest discover -s scripts -p "test_*.py"
 """
@@ -117,6 +118,96 @@ class DeployRenderTestCase(unittest.TestCase):
     def test_scrub_removes_secret_values_from_error_text(self):
         text = "bad value %s for key" % SECRETS["SESSION_SECRET"]
         self.assertNotIn(SECRETS["SESSION_SECRET"], deploy.scrub(text, SECRETS.values()))
+
+
+    def test_http_error_body_is_scrubbed_before_it_reaches_the_terminal(self):
+        body = ("rejected %s and %s" % (RENDER_KEY, SECRETS["AWS_SECRET_ACCESS_KEY"])).encode()
+        self.urlopen.side_effect = deploy.urllib.error.HTTPError(
+            deploy.BASE + "/services", 400, "Bad Request", {}, io.BytesIO(body))
+        call = deploy.make_caller(RENDER_KEY, [RENDER_KEY, *SECRETS.values()])
+
+        with self.assertRaises(SystemExit) as raised:
+            call("POST", "/services", {"x": 1})
+
+        message = str(raised.exception.code)
+        self.assertIn("HTTP 400", message)
+        self.assertIn("[redacted]", message)
+        self.assertNotIn(RENDER_KEY, message)
+        self.assertNotIn(SECRETS["AWS_SECRET_ACCESS_KEY"], message)
+
+    def run_live(self, existing):
+        """Runs main() against a fake Render API; returns (code, output, calls, secrets)."""
+        calls, secrets = [], []
+        service = {"id": "srv-1", "name": "exquisite-chorus",
+                   "serviceDetails": {"url": "https://exquisite-chorus.onrender.com"}}
+
+        def fake_call(method, path, body=None):
+            calls.append((method, path, body))
+            if path.startswith("/owners"):
+                return [{"owner": {"id": "own-1"}}]
+            if method == "GET" and path.startswith("/services?"):
+                return [{"service": service}] if existing else []
+            if method == "POST" and path == "/services":
+                return {"service": service}
+            if method == "POST" and path.endswith("/deploys"):
+                return {"id": "dep-1"}
+            if path == "/services/srv-1/deploys/dep-1" or path.startswith("/services/srv-1/deploys?"):
+                return {"status": "live"} if existing else [{"deploy": {"status": "live"}}]
+            return {}
+
+        def fake_make_caller(key, values):
+            secrets.extend(values)
+            return fake_call
+
+        with mock.patch.object(deploy, "make_caller", fake_make_caller):
+            code, output = self.run_main()
+        return code, output, calls, secrets
+
+    def test_live_run_creates_the_service_when_none_exists(self):
+        code, output, calls, secrets = self.run_live(existing=False)
+
+        self.assertEqual(code, 0)
+        create = next(body for method, path, body in calls if method == "POST" and path == "/services")
+        self.assertEqual(create["ownerId"], "own-1")
+        self.assertEqual(len(create["envVars"]), len(deploy.ENV_KEYS))
+        self.assertFalse(any(method in ("PATCH", "PUT") for method, _, _ in calls))
+        self.assertIn("created", output)
+        self.assertIn("deploy: live", output)
+        # Every value the service gets, and the API key, are scrubbed from errors.
+        self.assertIn(RENDER_KEY, secrets)
+        for value in SECRETS.values():
+            self.assertIn(value, secrets)
+        for value in [*SECRETS.values(), RENDER_KEY]:
+            self.assertNotIn(value, output)
+
+    def test_live_run_updates_settings_env_vars_and_deploys_an_existing_service(self):
+        code, output, calls, _ = self.run_live(existing=True)
+
+        self.assertEqual(code, 0)
+        methods = [(method, path) for method, path, _ in calls]
+        self.assertIn(("PATCH", "/services/srv-1"), methods)
+        self.assertIn(("PUT", "/services/srv-1/env-vars"), methods)
+        self.assertIn(("POST", "/services/srv-1/deploys"), methods)
+        self.assertNotIn(("POST", "/services"), methods)
+        self.assertIn("deploy triggered", output)
+        self.assertIn("deploy: live", output)
+
+    def test_wait_for_deploy_stops_on_live_failure_or_timeout(self):
+        def statuses(*values):
+            answers = iter(values)
+            return lambda method, path, body=None: {"status": next(answers)}
+
+        with mock.patch.object(deploy.time, "sleep") as sleep, contextlib.redirect_stdout(io.StringIO()):
+            deploy.wait_for_deploy(statuses("build_in_progress", "live"), "srv-1", "dep-1")
+            self.assertEqual(sleep.call_count, 1)
+
+            with self.assertRaises(SystemExit) as failed:
+                deploy.wait_for_deploy(statuses("build_failed"), "srv-1", "dep-1")
+            self.assertIn("build_failed", str(failed.exception.code))
+
+            with self.assertRaises(SystemExit) as timed_out:
+                deploy.wait_for_deploy(statuses(*["build_in_progress"] * 3), "srv-1", "dep-1", attempts=3)
+            self.assertIn("did not finish", str(timed_out.exception.code))
 
 
 if __name__ == "__main__":
