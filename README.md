@@ -27,12 +27,32 @@ Stretch: self-reported AI-content flags; "horizontal" Exquisite Corpse–style c
 | Prototypes + heuristic evaluation | Nov 17 (in class) |
 | Final submission (repo, hosted app, video, write-up) | Dec 8, 11:59 PM CT |
 
-## Undecided
+## Stack
 
-- Tech stack (course requires: frontend, REST API, JavaScript backend, a database, user auth)
-- Where audio files are stored and how they're played back
-- Hosting
-- Team roles
+Decided in [the tech stack plan](docs/plans/2026-11-12-001-feat-tech-stack-plan.md):
+
+- TypeScript npm workspaces: `client/` (React 19 + Vite), `server/` (Express 5 + Mongoose 9
+  on MongoDB), `shared/` (API payload types)
+- Auth: team-built, server-side sessions
+- Audio: private S3 bucket, browser uploads and plays back via presigned URLs
+- Hosting: planned as one Render web service serving both the app and the API (not
+  deployed yet)
+
+Still undecided: team roles.
+
+## Development
+
+Prerequisites: Node 24 (see `.node-version`).
+
+```sh
+npm install
+cp .env.example .env   # then fill in values
+npm run dev            # API on :3000, client on http://localhost:5173 (proxies /api)
+npm test               # vitest in client and server
+npm run lint           # oxlint
+npm run typecheck      # tsc in every workspace
+npm run build          # client bundle + server compile
+```
 
 ## Repo notes
 

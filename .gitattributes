@@ -1,2 +1,5 @@
+# Normalize line endings to LF for everyone (the team is cross-platform).
+* text=auto eol=lf
+
 # The exporter writes this file itself; keep Git from rewriting its line endings.
 llm_logs_raburt3.csv -text

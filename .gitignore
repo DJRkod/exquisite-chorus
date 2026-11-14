@@ -2,6 +2,17 @@
 node_modules/
 .env
 
+# Build output and test coverage
+dist/
+coverage/
+*.tsbuildinfo
+
+# Secrets: real env files and credentials stay out of Git
+.env.*
+!.env.example
+.render_api_key
+.aws_credentials
+
 # Personal Claude Code settings (raburt3's LLM-logging hooks live here)
 .claude/settings.local.json
 
