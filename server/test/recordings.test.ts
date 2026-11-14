@@ -266,6 +266,41 @@ describe('POST /api/recordings/:id/confirm', () => {
     expect(del[0].args[0].input).toEqual({ Bucket: BUCKET, Key: pendingKey })
   })
 
+  it('returns 422 again for a rejected recording without touching S3', async () => {
+    const { agent } = await signedIn(makeApp())
+    const { id } = await presign(agent)
+    mockStoredObject(25 * 1024 * 1024, 'audio/mp4')
+    await agent.post(`/api/recordings/${id}/confirm`).send({}).expect(422)
+
+    s3Mock.reset()
+    mockStoredObject(25 * 1024 * 1024, 'audio/mp4')
+    const again = await agent.post(`/api/recordings/${id}/confirm`).send({})
+    expect(again.status).toBe(422)
+    expect(again.body.data).toBeNull()
+    expect(s3Mock.commandCalls(HeadObjectCommand)).toHaveLength(0)
+    expect(s3Mock.commandCalls(CopyObjectCommand)).toHaveLength(0)
+    expect(s3Mock.commandCalls(DeleteObjectCommand)).toHaveLength(0)
+    expect((await Recording.findById(id))?.status).toBe('rejected')
+  })
+
+  it('returns a generic 500 and leaves the recording pending when HeadObject is denied', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { agent } = await signedIn(makeApp())
+    const { id } = await presign(agent)
+    const denied = Object.assign(new Error('Access Denied'), {
+      name: 'AccessDenied',
+      $metadata: { httpStatusCode: 403 },
+    })
+    s3Mock.on(HeadObjectCommand).rejects(denied)
+
+    const res = await agent.post(`/api/recordings/${id}/confirm`).send({})
+    expect(res.status).toBe(500)
+    expect(res.body).toEqual({ message: 'Something went wrong on the server', data: null })
+    expect((await Recording.findById(id))?.status).toBe('pending')
+    expect(s3Mock.commandCalls(CopyObjectCommand)).toHaveLength(0)
+    expect(s3Mock.commandCalls(DeleteObjectCommand)).toHaveLength(0)
+  })
+
   it('still returns 200 when deleting the pending object fails', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const { agent } = await signedIn(makeApp())
