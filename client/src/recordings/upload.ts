@@ -3,6 +3,8 @@
 // Each step can be resumed: a failed confirm retries confirm alone.
 import type { CreateUploadResponse, RecordingDto } from '@exquisite-chorus/shared'
 import { ApiError, confirmUpload, createUpload } from '../api/client.ts'
+import { errorMessage } from '../auth/errorMessage.ts'
+import { audioContextClass } from './playback.ts'
 import { toDurationMs, type Take } from './recorder.ts'
 
 /** Matches the server's presigned POST policy (20 MB). */
@@ -55,8 +57,7 @@ function metadataSeconds(blob: Blob, deps: Required<Omit<MeasureDeps, 'decode'>>
 }
 
 async function decodeSeconds(data: ArrayBuffer): Promise<number> {
-  const Context =
-    globalThis.AudioContext ?? (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  const Context = audioContextClass()
   if (!Context) throw new Error('Web Audio is unavailable')
   const ctx = new Context()
   try {
@@ -117,8 +118,13 @@ export function postToS3(
   return new Promise<void>((resolve, reject) => {
     const xhr = new XHR()
     xhr.open('POST', target.url)
+    let lastPercent: number | undefined
     xhr.upload.addEventListener('progress', (event) => {
-      if (event.lengthComputable && event.total > 0) onProgress?.(Math.round((event.loaded / event.total) * 100))
+      if (!event.lengthComputable || event.total <= 0) return
+      const percent = Math.round((event.loaded / event.total) * 100)
+      if (percent === lastPercent) return
+      lastPercent = percent
+      onProgress?.(percent)
     })
     // S3 answers 204 No Content on success.
     xhr.addEventListener('load', () =>
@@ -155,10 +161,6 @@ export interface SaveDeps extends PostDeps {
   onFinalizing?: (recordingId: string) => void
 }
 
-function messageFor(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? err.message : fallback
-}
-
 /** Runs the upload from `from` to the end. Rejects with a SaveError naming the step to resume. */
 export async function saveTake(take: Take, from: SaveFrom, deps: SaveDeps = {}): Promise<RecordingDto> {
   let recordingId: string
@@ -171,7 +173,7 @@ export async function saveTake(take: Take, from: SaveFrom, deps: SaveDeps = {}):
       deps.onProgress?.(0)
       await postToS3(target, take.blob, deps)
     } catch (err) {
-      throw new SaveError(messageFor(err, UPLOAD_FAILED), 'upload')
+      throw new SaveError(errorMessage(err, UPLOAD_FAILED), 'upload')
     }
   }
 
@@ -184,6 +186,6 @@ export async function saveTake(take: Take, from: SaveFrom, deps: SaveDeps = {}):
     }
     // A rejected upload cannot be confirmed again; start over with a new one.
     if (err instanceof ApiError && err.status === 422) throw new SaveError(err.message, 'upload')
-    throw new SaveError(messageFor(err, 'Saving failed. Retry to finish.'), 'confirm', recordingId)
+    throw new SaveError(errorMessage(err, 'Saving failed. Retry to finish.'), 'confirm', recordingId)
   }
 }

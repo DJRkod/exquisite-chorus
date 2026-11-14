@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 import { Router, type Request, type Response } from 'express'
 import { ipKeyGenerator, rateLimit, type Options } from 'express-rate-limit'
 import type { Config } from '../config.js'
-import { HttpError, respond } from '../http.js'
+import { field, HttpError, isRecord, respond } from '../http.js'
 import { requireAuth } from './guards.js'
 import { sessionCookieOptions, SESSION_COOKIE } from './session.js'
 import { DISPLAY_NAME_MAX, toPublicUser, User } from './user.model.js'
@@ -22,10 +22,6 @@ const RATE_LIMIT = 10
 export interface AuthRouterOptions {
   /** bcrypt cost factor; tests lower it for speed. */
   bcryptRounds?: number
-}
-
-function field(body: unknown, name: string): unknown {
-  return typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[name] : undefined
 }
 
 function normalizeEmail(raw: unknown): string | undefined {
@@ -59,15 +55,18 @@ function parseSignIn(body: unknown): SignInRequest {
   return { email, password }
 }
 
+/** Promisifies a session method that takes a single error-first callback. */
+function viaCallback(fn: (callback: (err: unknown) => void) => unknown): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    fn((err: unknown) => (err ? reject(err) : resolve()))
+  })
+}
+
 /** Starts a fresh session (new ID, defeating fixation) for the given user. */
 async function signIn(req: Request, userId: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    req.session.regenerate((err: unknown) => (err ? reject(err) : resolve()))
-  })
+  await viaCallback((cb) => req.session.regenerate(cb))
   req.session.userId = userId
-  await new Promise<void>((resolve, reject) => {
-    req.session.save((err: unknown) => (err ? reject(err) : resolve()))
-  })
+  await viaCallback((cb) => req.session.save(cb))
 }
 
 function limiterOptions(): Partial<Options> {
@@ -107,7 +106,7 @@ export function authRouter(config: Config, options: AuthRouterOptions = {}): Rou
     try {
       user = await User.create({ email: input.email, displayName: input.displayName, passwordHash })
     } catch (err) {
-      if (typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 11000) {
+      if (isRecord(err) && err.code === 11000) {
         throw new HttpError(409, 'An account with that email already exists')
       }
       throw err
@@ -126,9 +125,7 @@ export function authRouter(config: Config, options: AuthRouterOptions = {}): Rou
   })
 
   router.post('/auth/logout', async (req, res) => {
-    await new Promise<void>((resolve, reject) => {
-      req.session.destroy((err: unknown) => (err ? reject(err) : resolve()))
-    })
+    await viaCallback((cb) => req.session.destroy(cb))
     res.clearCookie(SESSION_COOKIE, cookieOptions)
     res.status(204).end()
   })

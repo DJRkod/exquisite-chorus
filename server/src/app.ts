@@ -61,6 +61,8 @@ export function createApp(config: Config, deps: AppDeps = {}): Express {
   // CSRF defenses (KTD4) run before any body parsing or session work.
   app.use('/api', originCheck(config.appOrigins), requireJsonBody)
   app.use(express.json())
+  // Health needs no session, so it skips the session store lookup.
+  app.use('/api', healthRouter())
   app.use('/api', sessionMiddleware(config, deps.sessionStore ?? createSessionStore()))
 
   // Without a bucket (local dev without AWS) the app still boots and the
@@ -69,7 +71,6 @@ export function createApp(config: Config, deps: AppDeps = {}): Express {
   const storage = bucket ? s3Storage(deps.s3 ?? createS3Client(config), bucket) : null
 
   // API: built-in routers, then extra routers.
-  app.use('/api', healthRouter())
   app.use('/api', authRouter(config, { bcryptRounds: deps.bcryptRounds }))
   app.use('/api', recordingsRouter(storage))
   for (const router of deps.apiRouters ?? []) app.use('/api', router)

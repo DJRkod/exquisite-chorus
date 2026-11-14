@@ -7,11 +7,11 @@ import type {
   PlaybackUrlResponse,
   RecordingDto,
 } from '@exquisite-chorus/shared'
-import { Router, type RequestHandler, type Response } from 'express'
+import { Router, type Response } from 'express'
 import { Types } from 'mongoose'
 import { requireAuth } from '../auth/guards.js'
 import { User } from '../auth/user.model.js'
-import { HttpError, respond } from '../http.js'
+import { field, HttpError, respond } from '../http.js'
 import { isMissingObject, MAX_UPLOAD_BYTES, type ObjectInfo, type Storage } from '../storage/s3.js'
 import { Recording, toRecordingDto, type RecordingDocument } from './recording.model.js'
 
@@ -19,10 +19,6 @@ export const STORAGE_NOT_CONFIGURED = 'Audio storage is not configured'
 export const CONTENT_TYPE_MAX = 100
 export const DURATION_MAX_MS = 30 * 60 * 1000
 export const LIST_LIMIT = 100
-
-function field(body: unknown, name: string): unknown {
-  return typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[name] : undefined
-}
 
 function isAudioType(value: unknown): value is string {
   return typeof value === 'string' && value.startsWith('audio/') && value.length <= CONTENT_TYPE_MAX
@@ -78,20 +74,22 @@ async function deleteQuietly(storage: Storage, key: string): Promise<void> {
 }
 
 export function recordingsRouter(storage: Storage | null): Router {
-  const requireStorage: RequestHandler = (_req, _res, next) => {
-    if (!storage) throw new HttpError(503, STORAGE_NOT_CONFIGURED)
-    next()
-  }
-
   const router = Router()
-  router.use('/recordings', requireAuth, requireStorage)
+  // Signed-out requests get 401 before the 503, and only under /recordings.
+  if (!storage) {
+    router.use('/recordings', requireAuth, () => {
+      throw new HttpError(503, STORAGE_NOT_CONFIGURED)
+    })
+    return router
+  }
+  router.use('/recordings', requireAuth)
 
   router.post('/recordings', async (req, res) => {
     const input = parseCreateUpload(req.body)
     const owner = req.user!._id
     const pendingKey = `pending/${String(owner)}/${randomUUID()}`
     const rec = await Recording.create({ owner, status: 'pending', pendingKey, contentType: input.contentType })
-    const { url, fields } = await storage!.presignUpload({ key: pendingKey, contentType: input.contentType })
+    const { url, fields } = await storage.presignUpload({ key: pendingKey, contentType: input.contentType })
     respond<CreateUploadResponse>(res, 201, 'Upload URL created', { recordingId: rec.id, url, fields })
   })
 
@@ -107,30 +105,35 @@ export function recordingsRouter(storage: Storage | null): Router {
     const { pendingKey } = rec
     const key = `audio/${String(owner)}/${pendingKey.split('/').pop()}`
 
+    // Another confirm may have finished first: answer with its result if so.
+    const sendIfReadyElse409 = async (message: string): Promise<void> => {
+      const current = await Recording.findOne({ _id: id, owner })
+      if (current?.status === 'ready') return sendRecording(res, current)
+      throw new HttpError(409, message)
+    }
+
     // The pending object can be missing because it was never uploaded, or
     // because a concurrent confirm already promoted and deleted it.
     const onMissing = async (err: unknown): Promise<void> => {
       if (!isMissingObject(err)) throw err
-      const current = await Recording.findOne({ _id: id, owner })
-      if (current?.status === 'ready') return sendRecording(res, current)
-      throw new HttpError(409, 'The upload has not reached storage yet')
+      return sendIfReadyElse409('The upload has not reached storage yet')
     }
 
     let info: ObjectInfo
     try {
-      info = await storage!.headObject(pendingKey)
+      info = await storage.headObject(pendingKey)
     } catch (err) {
       return onMissing(err)
     }
 
     if (!isAcceptableObject(info)) {
       await Recording.updateOne({ _id: id, owner, status: 'pending' }, { status: 'rejected' })
-      await deleteQuietly(storage!, pendingKey)
+      await deleteQuietly(storage, pendingKey)
       throw new HttpError(422, 'Upload must be an audio file from 1 byte to 20 MB')
     }
 
     try {
-      await storage!.promote(pendingKey, key)
+      await storage.promote(pendingKey, key)
     } catch (err) {
       return onMissing(err)
     }
@@ -147,13 +150,9 @@ export function recordingsRouter(storage: Storage | null): Router {
       },
       { returnDocument: 'after' },
     )
-    if (!ready) {
-      const current = await Recording.findOne({ _id: id, owner })
-      if (current?.status === 'ready') return sendRecording(res, current)
-      throw new HttpError(409, 'The recording changed during confirmation; try again')
-    }
+    if (!ready) return sendIfReadyElse409('The recording changed during confirmation; try again')
 
-    await deleteQuietly(storage!, pendingKey)
+    await deleteQuietly(storage, pendingKey)
     sendRecording(res, ready)
   })
 
@@ -173,7 +172,7 @@ export function recordingsRouter(storage: Storage | null): Router {
     const id = parseId(req.params.id)
     const rec = await Recording.findOne({ _id: id, status: 'ready' })
     if (!rec?.key) throw new HttpError(404, 'Recording not found')
-    respond<PlaybackUrlResponse>(res, 200, 'OK', await storage!.presignPlayback(rec.key))
+    respond<PlaybackUrlResponse>(res, 200, 'OK', await storage.presignPlayback(rec.key))
   })
 
   return router

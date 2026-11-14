@@ -6,6 +6,14 @@
 /** Seconds between scheduling and the shared start, so every source makes it. */
 export const START_DELAY_S = 0.1
 
+/** The browser's AudioContext constructor (webkit-prefixed on older Safari), if any. */
+export function audioContextClass(): typeof AudioContext | undefined {
+  return (
+    globalThis.AudioContext ??
+    (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  )
+}
+
 type Playable = Pick<HTMLAudioElement, 'play' | 'addEventListener' | 'removeEventListener'> & { src: string }
 
 /** Plays once: resolves when playback starts, rejects on a media error or a refused play(). */

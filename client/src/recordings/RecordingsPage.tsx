@@ -5,10 +5,17 @@
 import type { RecordingDto } from '@exquisite-chorus/shared'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { getPlaybackUrl, listRecordings } from '../api/client.ts'
-import { errorMessage } from '../auth/errorMessage.ts'
+import { errorMessage, GENERIC_ERROR } from '../auth/errorMessage.ts'
 import { useAuth } from '../auth/useAuth.ts'
-import { loadGroup, playTrack, startGroup, TrackLoadError, type PlayingGroup } from './playback.ts'
-import { RecorderError, startRecording, type ActiveRecording, type Take } from './recorder.ts'
+import {
+  audioContextClass,
+  loadGroup,
+  playTrack,
+  startGroup,
+  TrackLoadError,
+  type PlayingGroup,
+} from './playback.ts'
+import { RECORDING_FAILED, RecorderError, startRecording, type ActiveRecording, type Take } from './recorder.ts'
 import { checkAudioFile, measureDuration, saveTake, SaveError, type SaveFrom } from './upload.ts'
 
 interface PreviewTake extends Take {
@@ -37,21 +44,30 @@ function formatDuration(ms: number | null | undefined): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
 
+const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+
 function formatDate(iso: string): string {
   const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  return Number.isNaN(date.getTime()) ? iso : dateFormat.format(date)
 }
 
 function describe(rec: RecordingDto): string {
   return `${rec.ownerDisplayName || 'Unknown'}’s recording from ${formatDate(rec.createdAt)}`
 }
 
-function audioContextClass(): typeof AudioContext | undefined {
-  return (
-    globalThis.AudioContext ??
-    (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-  )
-}
+/** Per-row play button text and aria-label prefix, by that row's playback phase. */
+const PLAY_BUTTON = {
+  idle: { text: 'Play', aria: 'Play' },
+  loading: { text: 'Loading…', aria: 'Loading' },
+  playing: { text: 'Stop', aria: 'Stop' },
+} as const
+
+/** "Play together" button text and aria-label, by group playback state. */
+const TOGETHER_BUTTON = {
+  idle: { text: 'Play together', aria: undefined },
+  loading: { text: 'Loading…', aria: undefined },
+  playing: { text: 'Stop', aria: 'Stop playing together' },
+} as const
 
 const fetchPlaybackUrl = (id: string) => getPlaybackUrl(id).then((playback) => playback.url)
 
@@ -59,7 +75,6 @@ export default function RecordingsPage() {
   const { user } = useAuth()
   const [capture, setCapture] = useState<Capture>({ step: 'idle' })
   const [notice, setNotice] = useState<string | null>(null)
-  const [now, setNow] = useState(() => Date.now())
   const [list, setList] = useState<ListState>({ status: 'loading' })
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [single, setSingle] = useState<{ id: string; phase: 'loading' | 'playing' } | null>(null)
@@ -99,13 +114,6 @@ export default function RecordingsPage() {
     fetchList()
   }
 
-  const recordingStartedAt = capture.step === 'recording' ? capture.startedAt : null
-  useEffect(() => {
-    if (recordingStartedAt === null) return
-    const timer = setInterval(() => setNow(Date.now()), 250)
-    return () => clearInterval(timer)
-  }, [recordingStartedAt])
-
   // ---- capture ----
 
   function showTake(take: Take) {
@@ -126,11 +134,9 @@ export default function RecordingsPage() {
     setCapture({ step: 'starting' })
     try {
       activeRef.current = await startRecording()
-      const startedAt = Date.now()
-      setNow(startedAt)
-      setCapture({ step: 'recording', startedAt })
+      setCapture({ step: 'recording', startedAt: Date.now() })
     } catch (err) {
-      setNotice(err instanceof RecorderError ? err.message : "Couldn't start recording. Pick a file instead.")
+      setNotice(err instanceof RecorderError ? err.message : RECORDING_FAILED)
       setCapture({ step: 'idle' })
     }
   }
@@ -186,7 +192,7 @@ export default function RecordingsPage() {
       setCapture({
         step: 'error',
         take,
-        message: failure?.message ?? 'Something went wrong. Try again.',
+        message: failure?.message ?? GENERIC_ERROR,
         from: resume,
         sessionExpired: failure?.sessionExpired ?? false,
       })
@@ -304,7 +310,7 @@ export default function RecordingsPage() {
 
         <p role="status" className="capture-status">
           {capture.step === 'starting' && 'Waiting for the microphone…'}
-          {capture.step === 'recording' && `Recording ${formatDuration(now - capture.startedAt)}`}
+          {capture.step === 'recording' && <RecordingClock startedAt={capture.startedAt} />}
           {capture.step === 'preparing' && 'Preparing the take…'}
           {capture.step === 'uploading' && `Uploading… ${capture.percent}%`}
           {capture.step === 'finalizing' && 'Saving…'}
@@ -360,9 +366,9 @@ export default function RecordingsPage() {
             type="button"
             onClick={() => handlePlayTogether(chosen)}
             disabled={together === 'loading' || (together === 'idle' && chosen.length < 2)}
-            aria-label={together === 'playing' ? 'Stop playing together' : undefined}
+            aria-label={TOGETHER_BUTTON[together].aria}
           >
-            {together === 'loading' ? 'Loading…' : together === 'playing' ? 'Stop' : 'Play together'}
+            {TOGETHER_BUTTON[together].text}
           </button>
           <span role="status">
             {together === 'idle' && chosen.length < 2 && 'Select two or more recordings to play them together.'}
@@ -394,7 +400,8 @@ export default function RecordingsPage() {
           <ul className="recording-list" aria-label="Recordings">
             {items.map((rec) => {
               const label = describe(rec)
-              const state = single?.id === rec.id ? single.phase : null
+              const state = single?.id === rec.id ? single.phase : 'idle'
+              const button = PLAY_BUTTON[state]
               return (
                 <li key={rec.id}>
                   <span className="owner">{rec.ownerDisplayName || 'Unknown'}</span>
@@ -404,9 +411,9 @@ export default function RecordingsPage() {
                     type="button"
                     onClick={() => handlePlay(rec)}
                     disabled={state === 'loading'}
-                    aria-label={`${state === 'playing' ? 'Stop' : state === 'loading' ? 'Loading' : 'Play'} ${label}`}
+                    aria-label={`${button.aria} ${label}`}
                   >
-                    {state === 'playing' ? 'Stop' : state === 'loading' ? 'Loading…' : 'Play'}
+                    {button.text}
                   </button>
                   <label className="select">
                     <input
@@ -425,6 +432,20 @@ export default function RecordingsPage() {
       </section>
     </main>
   )
+}
+
+/**
+ * "Recording m:ss" for the take in progress. It ticks on its own so the page
+ * does not re-render; whole seconds only change once a second, so React skips
+ * the identical updates in between.
+ */
+function RecordingClock({ startedAt }: { startedAt: number }) {
+  const [seconds, setSeconds] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds(Math.round((Date.now() - startedAt) / 1000)), 250)
+    return () => clearInterval(timer)
+  }, [startedAt])
+  return `Recording ${formatDuration(seconds * 1000)}`
 }
 
 /** Signs back in without leaving the page, so a pending take is not lost. */

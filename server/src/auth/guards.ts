@@ -19,7 +19,7 @@ export const NOT_SIGNED_IN = 'Not signed in'
 /** Loads the session's user onto req.user, or answers 401. */
 export const requireAuth: RequestHandler = async (req, _res, next) => {
   const userId = req.session?.userId
-  const user = userId ? await User.findById(userId) : null
+  const user = userId ? await User.findById(userId).select('-passwordHash') : null
   if (!user) throw new HttpError(401, NOT_SIGNED_IN)
   req.user = user
   next()

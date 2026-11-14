@@ -25,8 +25,13 @@ export const apiNotFound: RequestHandler = (_req, res) => {
   respond(res, 404, 'Endpoint not found')
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+/** Reads one property of an untrusted request body; undefined unless the body is an object. */
+export function field(body: unknown, name: string): unknown {
+  return isRecord(body) ? body[name] : undefined
 }
 
 /** Every error becomes the JSON envelope; nothing internal reaches the client. */

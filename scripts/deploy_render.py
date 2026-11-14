@@ -30,6 +30,11 @@ DEFAULT_REPO = "https://github.com/DJRkod/exquisite-chorus"
 BUILD_COMMAND = "npm ci --include=dev && npm run build"
 START_COMMAND = "npm start"
 HEALTH_CHECK_PATH = "/api/health"
+# Build, start and health check settings, sent on create and on every update.
+BUILD_DETAILS = {
+    "healthCheckPath": HEALTH_CHECK_PATH,
+    "envSpecificDetails": {"buildCommand": BUILD_COMMAND, "startCommand": START_COMMAND},
+}
 
 # Every variable the service gets, in this order. Values come from the env file.
 ENV_KEYS = [
@@ -83,8 +88,7 @@ def service_details(region):
         "runtime": "node",
         "region": region,
         "plan": "free",
-        "healthCheckPath": HEALTH_CHECK_PATH,
-        "envSpecificDetails": {"buildCommand": BUILD_COMMAND, "startCommand": START_COMMAND},
+        **BUILD_DETAILS,
     }
 
 
@@ -204,10 +208,7 @@ def main(argv=None):
     else:
         call("PATCH", "/services/%s" % service["id"], {
             "branch": args.branch,
-            "serviceDetails": {
-                "healthCheckPath": HEALTH_CHECK_PATH,
-                "envSpecificDetails": {"buildCommand": BUILD_COMMAND, "startCommand": START_COMMAND},
-            },
+            "serviceDetails": BUILD_DETAILS,
         })
         call("PUT", "/services/%s/env-vars" % service["id"], env_vars)
         deploy_id = call("POST", "/services/%s/deploys" % service["id"], {}).get("id")

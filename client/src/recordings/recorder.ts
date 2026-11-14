@@ -10,6 +10,9 @@ export const NO_MIC = 'No microphone found. Pick a file instead.'
 export const RECORDING_UNSUPPORTED = "This browser can't record audio. Pick a file instead."
 export const RECORDING_FAILED = "Couldn't start recording. Pick a file instead."
 
+/** Longest take, in ms; matches the server's durationMs cap (30 minutes). */
+export const MAX_DURATION_MS = 30 * 60 * 1000
+
 /** A finished take, ready to preview and upload. */
 export interface Take {
   blob: Blob
@@ -49,7 +52,7 @@ export function pickMimeType(
 export function toDurationMs(ms: number): number | undefined {
   if (!Number.isFinite(ms)) return undefined
   const rounded = Math.round(ms)
-  return rounded >= 1 && rounded <= 30 * 60 * 1000 ? rounded : undefined
+  return rounded >= 1 && rounded <= MAX_DURATION_MS ? rounded : undefined
 }
 
 function micMessage(err: unknown): string {
