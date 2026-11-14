@@ -6962,3 +6962,1000 @@ AWS_REGION=us-east-2
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 S3_BUCKET="
+"9896586b-d400-4979-8f16-982770bc4db9:0","2026-11-14T07:20:23.297Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","All four checks pass on my run too, and the changes match the unit. Committing U1:"
+"7ec34df6-f051-46bc-8bb4-e4915858b282:0","2026-11-14T07:20:26.557Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\""; git add .gitattributes .gitignore README.md .env.example .node-version .oxlintrc.json client server shared package-lock.json package.json tsconfig.base.json && git status --short | grep -v '^A ' ; git commit -q -m \""feat: scaffold TypeScript monorepo (client, server, shared)\n\nnpm workspaces with React 19 + Vite 8 client, Express 5 + Mongoose 9\nserver, and a types-only shared package. Root lint/typecheck/test/build\nscripts, LF line endings, and env template.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/[redacted]\"" 2>&1 | grep -v warning; git log --oneline | head -2"", ""description"": ""Commit U1 scaffold""}"
+"f32a6f03-c2c0-4a37-ad1b-ca50f67b5772:0","2026-11-14T07:20:27.516Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result","M  .gitattributes
+M  .gitignore
+M  README.md
+ M llm_logs_raburt3.csv
+llm_logs_raburt3.csv: 491 rows from C:\Users\User\.claude\projects\C--Users-User-Dropbox-UIUC-2026-Fall-CS-409-Art-of-Web-Programming-Project
+956fe39 feat: scaffold TypeScript monorepo (client, server, shared)
+41ef6cf docs: add collaboration rules and stack implementation plan"
+"f971ce8e-0587-48ec-9594-76e751842129:0","2026-11-14T07:20:31.208Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","U1 is committed. U2 is next: the Express foundation and serving the built app from the same server. I'm including the review's fixes for the security headers, `trust proxy`, and `APP_ORIGIN`."
+"5ad15f3e-da65-4c72-8a8f-af872a49ebff:0","2026-11-14T07:20:52.308Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Agent {""description"": ""Implement U2 Express foundation"", ""subagent_type"": ""general-purpose"", ""prompt"": ""You are implementing one unit of an implementation plan. Repo: C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project (git branch feat/stack-skeleton; Windows; Node 24.20, npm 11). U1 (monorepo scaffold) is committed — read the existing root/server/client/shared package.json, tsconfigs, and vitest configs first and build on them.\n\n**Do not commit, do not `git add`.** The orchestrator owns staging and commits. Do not edit the plan, `llm_logs_raburt3.csv`, `scripts/`, `.githooks/`, `.claude/`, `CLAUDE.md`, `docs/`. Read `CLAUDE.md` for repo rules.\n\n## Plan context (read these sections only)\nPlan: docs/plans/2026-11-12-001-feat-tech-stack-plan.md — read `## Goal Capsule`, `### Key Technical Decisions`, `### High-Level Technical Design` (topology diagram only), `### Risks & Dependencies`, `### U2. Express foundation and SPA hosting`, `## Verification Contract`, `## Definition of Done`. Do not implement other units (no auth, no recordings, no S3 client) — but design `app.ts` so U3/U4 can mount routers under `/api`.\n\n## Your unit: U2 — Express foundation and SPA hosting\nFollow U2's Goal, Files, Approach, Patterns (../mp3/routes/helpers.js and ../mp3/routes/index.js; parent folder of Project is C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming), and Test scenarios.\n\nOrchestrator corrections from document review (apply; they refine U2):\n- `trust proxy` is a **number of hops** from config (`TRUST_PROXY`, default `1` in production, `false`/0 in dev/test), **never `true`**.\n- Config (`server/src/config.ts`) parses and validates env into a typed object: `nodeEnv`, `port`, `mongodbUri`, `sessionSecret` (production requires ≥32 chars; startup throws otherwise), `appOrigins: string[]` from comma-separated `APP_ORIGIN`, `trustProxy`, `aws: { region, bucket, accessKeyId?, secretAccessKey? }`, and a derived `s3Origin` = `https://<bucket>.s3.<region>.amazonaws.com` (empty/absent when bucket unset). In production, missing `MONGODB_URI`, `SESSION_SECRET`, `APP_ORIGIN`, `S3_BUCKET`, `AWS_REGION` throws. In dev/test, sensible defaults. Export a pure `loadConfig(env)` so tests pass an env object. Add `TRUST_PROXY` to `.env.example`.\n- `helmet`: CSP based on helmet defaults, with `media-src 'self' blob: <s3Origin>` and `connect-src 'self' <s3Origin>` (omit s3Origin when absent). Tests assert both directives include the S3 origin when configured.\n- The app factory `createApp(config, deps?)` must not create module-level singletons that leak across test app instances (later units create rate limiters per app instance).\n- Static SPA: serve `client/dist` resolved relative to the server package (works both from `server/src` under tsx and `server/dist` compiled). If the directory is missing (e.g. tests, or client not built), skip static + fallback gracefully. Make the client dist path injectable via config/deps so tests can point it at a temp dir containing an `index.html` to test the fallback. Fallback: Express 5 named wildcard (e.g. `app.get('/*splat', ...)`) for non-`/api` GETs only.\n- Error middleware: `HttpError` → its status; Mongoose `ValidationError`/`CastError` → 400; Mongo duplicate key (code 11000) → 409; `SyntaxError` from body-parser (`type === 'entity.parse.failed'`) → 400; everything else → 500 with generic message, no stack; log the 500 server-side. Envelope `{ message, data }`, data defaults to null. Put the envelope type in `shared` (it already has `ApiEnvelope<T>`; reuse it via `import type`).\n- `db.ts`: `connectDb(uri)` / `disconnectDb()` with Mongoose 9 (no callbacks). `index.ts`: load dotenv, `loadConfig(process.env)`, connect, `createApp`, listen on `config.port`, log.\n- `GET /api/health` → 200 `{ message: 'OK', data: { db: <'connected'|'disconnected'|...> } }` from `mongoose.connection.readyState`.\n- Test setup (`server/test/setup.ts`, wired in server vitest config `setupFiles`): `mongodb-memory-server` started once (beforeAll), mongoose connected, collections cleared afterEach, stopped afterAll. Use `supertest` against `createApp(...)`. Add dev deps: `supertest`, `@types/supertest`, `mongodb-memory-server`. Runtime deps: `helmet`. Verify versions via `npm view`. Note: mongodb-memory-server downloads a mongod binary on first run — that's expected; give tests a generous `testTimeout`/`hookTimeout` (e.g. 60s for hooks).\n- Remove `--passWithNoTests` from the server test script if U1 added it (there are tests now).\n\n## Evidence\nBehavior-bearing: work test-first where practical — write `server/test/app.test.ts` covering U2's test scenarios plus the config ones, run them and observe them fail, then implement. Report the red observation.\n\n## Verification (run and report)\nFrom repo root: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` all pass. Also: build the client, start the compiled server locally with a dev-ish env pointing MONGODB_URI at an in-memory or unreachable URI is fine — just confirm `GET /` serves index.html and a deep link like `/recordings` reloads to index.html while `/api/nope` returns the 404 envelope (use curl). If a local MongoDB is not available, it's fine for health to report disconnected; don't block on it.\n\n## Final message must report\n(a) every file path created/modified; (b) verification evidence: behavior_changed, tests added (names), the red failure observed before implementation, each command run + result, deviations and why. Concise.""}"
+"bbfc44be-a097-4b7e-b66d-345a80b2b003:0","2026-11-14T07:20:52.312Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_prompt","You are implementing one unit of an implementation plan. Repo: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project (git branch feat/stack-skeleton; Windows; Node 24.20, npm 11). U1 (monorepo scaffold) is committed — read the existing root/server/client/shared package.json, tsconfigs, and vitest configs first and build on them.
+
+**Do not commit, do not `git add`.** The orchestrator owns staging and commits. Do not edit the plan, `llm_logs_raburt3.csv`, `scripts/`, `.githooks/`, `.claude/`, `CLAUDE.md`, `docs/`. Read `CLAUDE.md` for repo rules.
+
+## Plan context (read these sections only)
+Plan: docs/plans/2026-11-12-001-feat-tech-stack-plan.md — read `## Goal Capsule`, `### Key Technical Decisions`, `### High-Level Technical Design` (topology diagram only), `### Risks & Dependencies`, `### U2. Express foundation and SPA hosting`, `## Verification Contract`, `## Definition of Done`. Do not implement other units (no auth, no recordings, no S3 client) — but design `app.ts` so U3/U4 can mount routers under `/api`.
+
+## Your unit: U2 — Express foundation and SPA hosting
+Follow U2's Goal, Files, Approach, Patterns (../mp3/routes/helpers.js and ../mp3/routes/index.js; parent folder of Project is C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming), and Test scenarios.
+
+Orchestrator corrections from document review (apply; they refine U2):
+- `trust proxy` is a **number of hops** from config (`TRUST_PROXY`, default `1` in production, `false`/0 in dev/test), **never `true`**.
+- Config (`server/src/config.ts`) parses and validates env into a typed object: `nodeEnv`, `port`, `mongodbUri`, `sessionSecret` (production requires ≥32 chars; startup throws otherwise), `appOrigins: string[]` from comma-separated `APP_ORIGIN`, `trustProxy`, `aws: { region, bucket, accessKeyId?, secretAccessKey? }`, and a derived `s3Origin` = `https://<bucket>.s3.<region>.amazonaws.com` (empty/absent when bucket unset). In production, missing `MONGODB_URI`, `SESSION_SECRET`, `APP_ORIGIN`, `S3_BUCKET`, `AWS_REGION` throws. In dev/test, sensible defaults. Export a pure `loadConfig(env)` so tests pass an env object. Add `TRUST_PROXY` to `.env.example`.
+- `helmet`: CSP based on helmet defaults, with `media-src 'self' blob: <s3Origin>` and `connect-src 'self' <s3Origin>` (omit s3Origin when absent). Tests assert both directives include the S3 origin when configured.
+- The app factory `createApp(config, deps?)` must not create module-level singletons that leak across test app instances (later units create rate limiters per app instance).
+- Static SPA: serve `client/dist` resolved relative to the server package (works both from `server/src` under tsx and `server/dist` compiled). If the directory is missing (e.g. tests, or client not built), skip static + fallback gracefully. Make the client dist path injectable via config/deps so tests can point it at a temp dir containing an `index.html` to test the fallback. Fallback: Express 5 named wildcard (e.g. `app.get('/*splat', ...)`) for non-`/api` GETs only.
+- Error middleware: `HttpError` → its status; Mongoose `ValidationError`/`CastError` → 400; Mongo duplicate key (code 11000) → 409; `SyntaxError` from body-parser (`type === 'entity.parse.failed'`) → 400; everything else → 500 with generic message, no stack; log the 500 server-side. Envelope `{ message, data }`, data defaults to null. Put the envelope type in `shared` (it already has `ApiEnvelope<T>`; reuse it via `import type`).
+- `db.ts`: `connectDb(uri)` / `disconnectDb()` with Mongoose 9 (no callbacks). `index.ts`: load dotenv, `loadConfig(process.env)`, connect, `createApp`, listen on `config.port`, log.
+- `GET /api/health` → 200 `{ message: 'OK', data: { db: <'connected'|'disconnected'|...> } }` from `mongoose.connection.readyState`.
+- Test setup (`server/test/setup.ts`, wired in server vitest config `setupFiles`): `mongodb-memory-server` started once (beforeAll), mongoose connected, collections cleared afterEach, stopped afterAll. Use `supertest` against `createApp(...)`. Add dev deps: `supertest`, `@types/supertest`, `mongodb-memory-server`. Runtime deps: `helmet`. Verify versions via `npm view`. Note: mongodb-memory-server downloads a mongod binary on first run — that's expected; give tests a generous `testTimeout`/`hookTimeout` (e.g. 60s for hooks).
+- Remove `--passWithNoTests` from the server test script if U1 added it (there are tests now).
+
+## Evidence
+Behavior-bearing: work test-first where practical — write `server/test/app.test.ts` covering U2's test scenarios plus the config ones, run them and observe them fail, then implement. Report the red observation.
+
+## Verification (run and report)
+From repo root: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` all pass. Also: build the client, start the compiled server locally with a dev-ish env pointing MONGODB_URI at an in-memory or unreachable URI is fine — just confirm `GET /` serves index.html and a deep link like `/recordings` reloads to index.html while `/api/nope` returns the 404 envelope (use curl). If a local MongoDB is not available, it's fine for health to report disconnected; don't block on it.
+
+## Final message must report
+(a) every file path created/modified; (b) verification evidence: behavior_changed, tests added (names), the red failure observed before implementation, each command run + result, deviations and why. Concise."
+"f7364535-4c29-4cad-836b-bc2eb4cd28c0:0","2026-11-14T07:20:52.319Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result","Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)
+agentId: a83c66c5513621287 (internal ID - do not mention to user. Use SendMessage with to: 'a83c66c5513621287', summary: '<5-10 word recap>' to continue this agent.)
+The agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.
+Do not duplicate this agent's work — avoid working with the same files or topics it is using.
+output_file: C:\Users\User\AppData\Local\Temp\claude\8eeb967062a64003\e98c1602-5de1-48cb-b5cf-ad09189e70d7\tasks\a83c66c5513621287.output
+Do NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification."
+"bedff16e-d80d-4f7c-be12-1845b9ca3f6a:0","2026-11-14T07:20:53.312Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","I'll start by reading the repo rules, plan sections, and existing scaffold."
+"1a2315b7-f781-4359-ab3d-a0046f7bfca7:0","2026-11-14T07:20:53.793Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","U2 is running in the background. Once it's back, I'll check its work and commit it, then start U3 (login)."
+"ab93789f-cf17-4b09-934b-b0b71beac05e:0","2026-11-14T07:20:54.923Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && cat CLAUDE.md && git status --short && ls -a && cat package.json server/package.json client/package.json shared/package.json && ls server server/src shared shared/src 2>/dev/null; cat server/tsconfig*.json server/vitest.config.* tsconfig*.json 2>/dev/null; cat .env.example; cat eslint.config.* 2>/dev/null | head -80"", ""description"": ""Read repo rules and scaffold config""}"
+"c1a52da1-03a2-4b22-bc28-1148dade5b9e:0","2026-11-14T07:20:55.281Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","# Working in this repo
+
+Five people share this repo, and not all of them use LLM agents. An agent can move faster than teammates can follow, so protect their work above all.
+
+## Before starting work
+
+- `git fetch` first, and check open PRs, issues and remote branches (`gh pr list`, `gh issue list`, `git branch -r`) for work that overlaps the task. If someone already owns it, stop and ask rather than build a duplicate.
+
+## Changing code
+
+- Work on a feature branch and open a PR. Don't push directly to `main`.
+- Never force-push, rebase, or reset a branch someone else has pushed to.
+- Don't delete or rewrite files, branches, or code that another person wrote unless explicitly asked. Check `git log` / `git blame` when unsure who owns something.
+- Keep changes scoped to the task. Don't reformat or ""clean up"" other people's code in passing.
+
+## Merging
+
+- Merge PRs only when asked. Never merge a teammate's PR on your own.
+- In a merge conflict, keep both sides' intent. If it's unclear which change should win, stop and ask.
+
+## LLM chat log
+
+`llm_logs_raburt3.csv` belongs to raburt3 and is regenerated by `scripts/export_llm_logs.py`. Don't edit it by hand, and don't add logging for other teammates.
+ M llm_logs_raburt3.csv
+./
+../
+.claude/
+.env.example
+.git/
+.gitattributes
+.githooks/
+.gitignore
+.llm_log_redact.txt
+.node-version
+.oxlintrc.json
+CLAUDE.md
+README.md
+client/
+docs/
+llm_logs_raburt3.csv
+node_modules/
+package-lock.json
+package.json
+scripts/
+server/
+shared/
+tsconfig.base.json
+{
+  ""name"": ""exquisite-chorus"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""workspaces"": [
+    ""shared"",
+    ""server"",
+    ""client""
+  ],
+  ""engines"": {
+    ""node"": "">=24 <25""
+  },
+  ""scripts"": {
+    ""dev"": ""concurrently -k -n server,client -c blue,magenta \""npm run dev -w server\"" \""npm run dev -w client\"""",
+    ""lint"": ""oxlint"",
+    ""typecheck"": ""npm run typecheck --workspaces"",
+    ""test"": ""npm run test -w server -w client"",
+    ""build"": ""npm run build -w client -w server"",
+    ""start"": ""npm run start -w server""
+  },
+  ""devDependencies"": {
+    ""concurrently"": ""^10.0.7"",
+    ""oxlint"": ""^1.93.0"",
+    ""typescript"": ""~6.0.3""
+  }
+}
+{
+  ""name"": ""@exquisite-chorus/server"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""scripts"": {
+    ""dev"": ""tsx watch src/index.ts"",
+    ""build"": ""tsc -p tsconfig.build.json"",
+    ""start"": ""node dist/index.js"",
+    ""typecheck"": ""tsc --noEmit -p ."",
+    ""test"": ""vitest run --passWithNoTests"",
+    ""test:watch"": ""vitest""
+  },
+  ""dependencies"": {
+    ""dotenv"": ""^18.0.10"",
+    ""express"": ""^5.3.0"",
+    ""mongoose"": ""^9.12.1""
+  },
+  ""devDependencies"": {
+    ""@exquisite-chorus/shared"": ""*"",
+    ""@types/express"": ""^5.0.6"",
+    ""@types/node"": ""^24.19.2"",
+    ""tsx"": ""^4.23.15"",
+    ""vitest"": ""^5.1.0""
+  }
+}
+{
+  ""name"": ""@exquisite-chorus/client"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""scripts"": {
+    ""dev"": ""vite"",
+    ""build"": ""vite build"",
+    ""preview"": ""vite preview"",
+    ""typecheck"": ""tsc --noEmit -p ."",
+    ""test"": ""vitest run"",
+    ""test:watch"": ""vitest""
+  },
+  ""dependencies"": {
+    ""react"": ""^19.3.1"",
+    ""react-dom"": ""^19.3.1"",
+    ""react-router-dom"": ""^7.18.5""
+  },
+  ""devDependencies"": {
+    ""@exquisite-chorus/shared"": ""*"",
+    ""@testing-library/jest-dom"": ""^7.0.1"",
+    ""@testing-library/react"": ""^16.3.3"",
+    ""@testing-library/user-event"": ""^14.6.10"",
+    ""@types/node"": ""^24.19.2"",
+    ""@types/react"": ""^19.3.0"",
+    ""@types/react-dom"": ""^19.3.0"",
+    ""@vitejs/plugin-react"": ""^6.3.0"",
+    ""jsdom"": ""^31.0.1"",
+    ""vite"": ""^8.3.8"",
+    ""vitest"": ""^5.1.0""
+  }
+}
+{
+  ""name"": ""@exquisite-chorus/shared"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""description"": ""API payload types shared by client and server. Types only: consumers use `import type`."",
+  ""exports"": {
+    ""."": {
+      ""types"": ""./src/index.ts""
+    }
+  },
+  ""scripts"": {
+    ""typecheck"": ""tsc --noEmit -p .""
+  }
+}
+server:
+dist/
+package.json
+src/
+tsconfig.build.json
+tsconfig.json
+vitest.config.ts
+
+server/src:
+index.ts
+
+shared:
+package.json
+src/
+tsconfig.json
+
+shared/src:
+index.ts
+{
+  ""extends"": ""./tsconfig.json"",
+  ""compilerOptions"": {
+    ""noEmit"": false,
+    ""rootDir"": ""src"",
+    ""outDir"": ""dist"",
+    ""sourceMap"": true
+  },
+  ""include"": [""src""],
+  ""exclude"": [""src/**/*.test.ts""]
+}
+{
+  ""extends"": ""../tsconfig.base.json"",
+  ""compilerOptions"": {
+    ""module"": ""nodenext"",
+    ""moduleResolution"": ""nodenext"",
+    ""lib"": [""ES2023""],
+    ""types"": [""node""],
+    ""noEmit"": true
+  },
+  ""include"": [""src"", ""test"", ""vitest.config.ts""]
+}
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
+  },
+})
+{
+  ""compilerOptions"": {
+    ""target"": ""es2023"",
+    ""strict"": true,
+    ""skipLibCheck"": true,
+    ""resolveJsonModule"": true,
+    ""isolatedModules"": true,
+    ""verbatimModuleSyntax"": true,
+    ""moduleDetection"": ""force"",
+    ""forceConsistentCasingInFileNames"": true,
+
+    /* Linting */
+ 
+[... truncated, 5474 characters total]"
+"d9d0278b-cba7-456d-bad2-1e6a9a1127ff:0","2026-11-14T07:20:57.495Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && cat server/src/index.ts shared/src/index.ts .oxlintrc.json .gitignore; ls client client/src; cat client/vite.config.* ; P=docs/plans/2026-11-12-001-feat-tech-stack-plan.md; grep -n '^##' $P"", ""description"": ""Read sources and plan headings""}"
+"eb5f7d54-b175-463e-9a42-1e27db6f89c0:0","2026-11-14T07:20:57.667Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","// Placeholder entry point. U2 replaces this with the Express app (app.ts) and
+// a startup that connects to MongoDB and listens on PORT.
+console.log('Exquisite Chorus server placeholder: nothing to serve yet.')
+// API payload types shared by client and server.
+// Types only: this package has no build step and no runtime code, so consumers
+// must use `import type { ... } from '@exquisite-chorus/shared'`.
+
+/** Every API response body has this shape. */
+export interface ApiEnvelope<T> {
+  message: string
+  data: T
+}
+{
+  ""$schema"": ""./node_modules/oxlint/configuration_schema.json"",
+  ""plugins"": [
+    ""react"",
+    ""typescript"",
+    ""oxc""
+  ],
+  ""ignorePatterns"": [
+    ""**/dist/**"",
+    ""**/node_modules/**"",
+    ""**/coverage/**""
+  ],
+  ""rules"": {
+    ""react/rules-of-hooks"": ""error"",
+    ""react/only-export-components"": [
+      ""warn"",
+      {
+        ""allowConstantExport"": true
+      }
+    ]
+  },
+  ""overrides"": [
+    {
+      ""files"": [
+        ""client/src/test/**"",
+        ""**/*.test.tsx""
+      ],
+      ""rules"": {
+        ""react/only-export-components"": ""off""
+      }
+    }
+  ]
+}
+.DS_Store
+node_modules/
+.env
+
+# Build output and test coverage
+dist/
+coverage/
+*.tsbuildinfo
+
+# Secrets: real env files and credentials stay out of Git
+.env.*
+!.env.example
+.render_api_key
+.aws_credentials
+
+# Personal Claude Code settings (raburt3's LLM-logging hooks live here)
+.claude/settings.local.json
+
+# raburt3's LLM log tooling (course LLM policy)
+.llm_log_redact.txt
+llm_logs_raburt3.csv.*.tmp
+__pycache__/
+
+# Playwright MCP snapshots
+.playwright-mcp/
+client:
+dist/
+index.html
+node_modules/
+package.json
+src/
+tsconfig.json
+vite.config.ts
+vitest.config.ts
+
+client/src:
+App.test.tsx
+App.tsx
+main.tsx
+test/
+import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+    // Proxy the API so the browser stays same-origin in dev, as in production.
+    proxy: {
+      '/api': 'http://localhost:3000',
+    },
+  },
+})
+14:## Goal Capsule
+25:## Product Contract
+29:### Summary
+33:### Problem Frame
+39:### Key Decisions
+59:### Requirements
+82:### Scope Boundaries
+89:### Dependencies / Assumptions
+98:### Sources / Research
+109:## Planning Contract
+111:### Key Technical Decisions
+128:### High-Level Technical Design
+176:### Output Structure
+196:### Assumptions
+201:### Risks & Dependencies
+215:### Planning Sources
+228:## Implementation Units
+230:### U1. Monorepo scaffold and tooling
+248:### U2. Express foundation and SPA hosting
+274:### U3. Authentication
+310:### U4. Recordings API and S3 integration
+347:### U5. Client shell, API client, and auth screens
+372:### U6. Recording capture, upload, and playback UI
+407:### U7. Deployment, cloud setup runbook, and secret hygiene
+439:## Verification Contract
+454:## Definition of Done"
+"6d53d1bd-4538-4714-b433-e8b0a8eae1e5:0","2026-11-14T07:20:58.352Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming\"" && cat mp3/routes/helpers.js mp3/routes/index.js"", ""description"": ""Read mp3 pattern files""}"
+"d3a8eb32-d509-4824-9e3f-29027be6c1d7:0","2026-11-14T07:20:58.490Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","// Shared pieces for the users and tasks routes: the response envelope, an
+// error type that carries an HTTP status, id checks, and query-string parsing.
+
+class HttpError extends Error {
+    constructor(status, message) {
+        super(message);
+        this.status = status;
+    }
+}
+
+function respond(res, status, message, data) {
+    res.status(status).json({ message: message, data: data === undefined ? null : data });
+}
+
+var OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+function isValidId(value) {
+    return typeof value === 'string' && OBJECT_ID.test(value);
+}
+
+function isNonEmptyString(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isPlainObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function first(query, name) {
+    return Array.isArray(query[name]) ? query[name][0] : query[name];
+}
+
+function parseJsonParam(raw, name) {
+    if (raw === undefined) return undefined;
+    var value;
+    try {
+        value = JSON.parse(raw);
+    } catch (e) {
+        throw new HttpError(400, 'Query parameter ""' + name + '"" is not valid JSON');
+    }
+    if (!isPlainObject(value)) {
+        throw new HttpError(400, 'Query parameter ""' + name + '"" must be a JSON object');
+    }
+    return value;
+}
+
+function parseIntParam(raw, name) {
+    if (raw === undefined) return undefined;
+    if (!/^\d+$/.test(String(raw).trim())) {
+        throw new HttpError(400, 'Query parameter ""' + name + '"" must be a non-negative integer');
+    }
+    return parseInt(raw, 10);
+}
+
+function parseCount(raw) {
+    if (raw === undefined) return false;
+    if (raw === 'true' || raw === '1') return true;
+    if (raw === 'false' || raw === '0' || raw === '') return false;
+    throw new HttpError(400, 'Query parameter ""count"" must be true or false');
+}
+
+// Parses where/sort/select/skip/limit/count for a collection endpoint. Only
+// the first value of a repeated parameter is used.
+function parseListQuery(query, options) {
+    var limit = parseIntParam(first(query, 'limit'), 'limit');
+    return {
+        where: parseJsonParam(first(query, 'where'), 'where') || {},
+        sort: parseJsonParam(first(query, 'sort'), 'sort'),
+        select: parseJsonParam(first(query, 'select'), 'select'),
+        skip: parseIntParam(first(query, 'skip'), 'skip'),
+        limit: limit === undefined ? options.defaultLimit : limit,
+        count: parseCount(first(query, 'count'))
+    };
+}
+
+function parseSelect(query) {
+    return parseJsonParam(first(query, 'select'), 'select');
+}
+
+// Runs a list query against a model and returns the documents or the count.
+async function runListQuery(Model, params) {
+    if (params.count) {
+        return Model.countDocuments(params.where);
+    }
+    var query = Model.find(params.where);
+    if (params.sort) query = query.sort(params.sort);
+    if (params.select) query = query.select(params.select);
+    if (params.skip) query = query.skip(params.skip);
+    if (params.limit !== undefined) query = query.limit(params.limit);
+    return query.exec();
+}
+
+// Errors MongoDB/Mongoose raise for malformed filters, sorts or projections
+// are the client's fault, not the server's.
+var BAD_QUERY_CODES = [2, 15975, 15976, 31253, 31254, 51175, 4772600];
+function isBadQueryError(err) {
+    if (!err) return false;
+    if (err.name === 'CastError' || err.name === 'ValidationError') return true;
+    return err.name === 'MongoServerError' && BAD_QUERY_CODES.indexOf(err.code) >= 0;
+}
+
+// Wraps an async route so rejections reach the error middleware.
+function wrap(handler) {
+    return function (req, res, next) {
+        Promise.resolve(handler(req, res, next)).catch(next);
+    };
+}
+
+module.exports = {
+    HttpError: HttpError,
+    respond: respond,
+    isValidId: isValidId,
+    isNonEmptyString: isNonEmptyString,
+    isPlainObject: isPlainObject,
+    parseListQuery: parseListQuery,
+    parseSelect: parseSelect,
+    runListQuery: runListQuery,
+    isBadQueryError: isBadQueryError,
+    wrap: wrap
+};
+/*
+ * Connect all of your endpoints together here.
+ */
+var express = require('express');
+var h = require('./helpers');
+
+module.exports = function (app) {
+    app.use('/api', require('./home.js')(express.Router()));
+    app.use('/api', require('./users.js')(express.Router()));
+    app.use('/api', require('./tasks.js')(express.Router()));
+
+    // Anything else under the API is an unknown endpoint.
+    app.use('/api', function (req, res) {
+        h.respond(res, 404, 'Endpoint not found');
+    });
+
+    // Every error becomes the JSON envelope; nothing from Mongoose reaches the client.
+    app.use(function (err, req, res, next) {
+        if (err instanceof h.HttpError) return h.respond(res, err.status, err.message);
+        if (err.type === 'entity.parse.failed' || err instanceof SyntaxError) {
+            return h.respond(res, 400, 'Request body is not valid JSON');
+        }
+        if (h.isBadQueryError(err)) return h.respond(res, 400, 'Invalid query or field value');
+        console.error(err
+[... truncated, 5080 characters total]"
+"5520b6e1-299d-40d7-9c6c-d45062c46fe3:0","2026-11-14T07:21:00.190Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && P=docs/plans/2026-11-12-001-feat-tech-stack-plan.md; sed -n '14,24p;111,175p;201,214p;248,273p;439,480p' $P"", ""description"": ""Read relevant plan sections""}"
+"39abe567-4397-4cee-bc3c-f79ae3f73718:0","2026-11-14T07:21:00.289Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","## Goal Capsule
+
+- **Objective:** Stand up the Exquisite Chorus stack as a deployed walking skeleton. It proves sign-up/sign-in, audio upload to S3, and synced playback end to end, so product features can be built on it toward the Dec 8, 2026 submission.
+- **Product authority:** App behavior comes from [docs/proposal.pdf](../proposal.pdf). The Product Contract below decides the stack, the Planning Contract decides how it is built, and unit bodies are authoritative over summaries. Product features (skills, tags, feed matching, contributions, project tracking) are later plans, not active scope.
+- **Open blockers:** None.
+- **Stop conditions:** Stop and ask if a settled decision proves unworkable, if AWS or Render setup needs a credential only raburt3 holds, or if a change would touch work a teammate has pushed (see `CLAUDE.md`).
+- **Execution profile:** TypeScript monorepo; units land in dependency order; API units are test-first against an in-memory database with S3 mocked.
+- **Tail ownership:** Work on a feature branch and open a PR to `main`; never merge without raburt3's say-so (`CLAUDE.md`).
+
+---
+
+### Key Technical Decisions
+
+- KTD1. **TypeScript on client, server, and a shared types package** (session-settled: user-directed — chosen over plain JavaScript and a TS-frontend/JS-backend split: shared API payload types catch frontend/backend drift across five contributors.) npm workspaces: `client/`, `server/`, `shared/`.
+- KTD2. **One Render web service: Express serves the built SPA and the API from the same origin.** `onrender.com` is on the Public Suffix List, so a separate static site would make the session cookie cross-site, which Safari and Firefox block. Same origin also removes API CORS. Cost: the frontend shares the API's cold start, handled by a wake-up banner (U5). Instantiates Product Contract R2.
+- KTD3. **Server-side sessions via `express-session` + `connect-mongo`, not JWTs.** Logout revokes immediately, and the session ID is regenerated on sign-in. Cookie: `httpOnly`, `secure` in production, `sameSite: 'lax'`, with `trust proxy` set because Render terminates TLS. Instantiates the team-built-auth Key Decision.
+- KTD4. **CSRF defense = SameSite=Lax + same origin + `Origin` header check on state-changing routes + JSON-only bodies.** `csurf` is deprecated and unnecessary under KTD2.
+- KTD5. **`bcryptjs` (cost 12) for password hashing.** Pure JS avoids native builds on teammates' Windows machines; the latency is acceptable at demo scale.
+- KTD6. **Login rate limit with `express-rate-limit`**, about 10 attempts per 15 minutes keyed on IP + email. It relies on `trust proxy`. Unknown-user and wrong-password return the same error.
+- KTD7. **Uploads use presigned POST, not PUT.** Only a POST policy can enforce `content-length-range` (1 B–20 MB) and an `audio/` content type at S3. It also sidesteps the SDK's checksum parameters that break browser PUTs. The policy expires in 5 minutes.
+- KTD8. **Uploads land under `pending/{userId}/{uuid}`, and confirm promotes them to `audio/{userId}/{uuid}`.** The server mints every key. Confirm runs `HeadObject`, re-checks size and type, copies to `audio/`, deletes the pending object, and marks the Recording `ready`. An S3 lifecycle rule expires `pending/` after 1 day, so abandoned uploads clean themselves up. Confirm is idempotent.
+- KTD9. **The bucket stays private, and playback uses presigned GET URLs valid for 1 hour.** Block Public Access stays on, and the client requests a URL at play time and retries once on a 403. Instantiates R4.
+- KTD10. **Synced playback uses the Web Audio API.** Each track is fetched, decoded with `decodeAudioData`, and every source is started at the same `AudioContext.currentTime + 0.1`. The context is resumed on a user gesture. Separate `<audio>` elements drift. Single-track playback may use `<audio>`.
+- KTD11. **Formats are stored as recorded, with no server transcoding.** The recorder picks the first supported type from `audio/mp4`, `audio/webm;codecs=opus`, `audio/ogg;codecs=opus` and stores the actual MIME type. Duration comes from decoded audio, because MediaRecorder WebM reports `Infinity`. If the cross-browser check fails on old Safari, that is a known limitation, not a blocker.
+- KTD12. **Current majors: Node 24 (pinned), Express 5, Mongoose 9, React 19, Vite 8, AWS SDK v3.** Mongoose 9 `pre` hooks take no `next()`, and Express 5 named wildcards (`/*splat`) differ from the MP3 code. All `@aws-sdk/*` packages move in lockstep.
+- KTD13. **Port MP3's response envelope and error handling** (`{message, data}`, `HttpError`, central error middleware), but use real unique indexes instead of app-level uniqueness checks. Express 5 forwards async rejections natively, so MP3's `wrap()` is dropped.
+- KTD14. **Tests run on vitest throughout.** The API uses supertest against an exported `app`, `mongodb-memory-server`, and `aws-sdk-client-mock`. The client uses Testing Library with jsdom. Unlike MP3's tests, these never touch Atlas or AWS.
+
+### 
+[... truncated, 11419 characters total]"
+"27cd0600-ed95-4ba9-be54-6ebb1466df66:0","2026-11-14T07:21:02.301Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && for p in helmet supertest @types/supertest mongodb-memory-server; do echo \""$p $(npm view $p version) $(npm view $p time.modified)\""; done; npm view mongodb-memory-server time --json | tail -5"", ""description"": ""Check latest dependency versions""}"
+"1062ad03-aa44-47d3-812d-cb41b9a56b41:0","2026-11-14T07:21:10.571Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","helmet 8.3.0 2026-07-12T01:20:06.296Z
+supertest 7.3.2 2026-11-07T09:08:00.300Z
+@types/supertest 7.2.1 2026-10-04T09:10:06.969Z
+mongodb-memory-server 11.3.0 2026-10-20T10:46:37.963Z
+  ""11.3.0-beta.5"": ""2026-09-21T14:58:17.117Z"",
+  ""11.3.0-beta.6"": ""2026-09-21T15:05:25.797Z"",
+  ""11.3.0"": ""2026-09-21T15:14:06.795Z"",
+  ""11.3.1-beta.1"": ""2026-10-20T10:46:37.490Z""
+}"
+"3731313c-eb93-4dd1-b79e-cf522a3efd5a:0","2026-11-14T07:21:12.939Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && npm view supertest time --json | tail -4; npm view helmet time --json | tail -3; npm view @types/supertest time --json | tail -3"", ""description"": ""Check publish dates""}"
+"aa89a92e-7e33-4635-ac61-ba90ee2421fb:0","2026-11-14T07:21:15.761Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","  ""7.3.0"": ""2026-09-22T12:35:11.859Z"",
+  ""7.3.1"": ""2026-10-02T14:51:40.083Z"",
+  ""7.3.2"": ""2026-11-07T09:08:00.147Z""
+}
+  ""8.2.0"": ""2026-05-22T02:54:02.474Z"",
+  ""8.3.0"": ""2026-07-12T01:20:06.201Z""
+}
+  ""7.2.0"": ""2026-02-25T21:44:23.097Z"",
+  ""7.2.1"": ""2026-07-14T08:15:42.665Z""
+}"
+"a5101172-73eb-460e-83d2-fd1cb596976c:0","2026-11-14T07:21:18.548Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && npm install -w server helmet@^8.3.0 2>&1 | tail -3 && npm install -w server -D supertest@^7.3.2 @types/supertest@^7.2.1 mongodb-memory-server@^11.3.0 2>&1 | tail -3 && cat server/package.json"", ""description"": ""Install server dependencies"", ""timeout"": 300000}"
+"73e8eeb7-9f37-4099-8a7c-df3c3b618d35:0","2026-11-14T07:21:41.027Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","npm warn install-scripts   [redacted-email] (postinstall: node install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm warn install-scripts   [redacted-email] (postinstall: node ./postinstall.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+{
+  ""name"": ""@exquisite-chorus/server"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""scripts"": {
+    ""dev"": ""tsx watch src/index.ts"",
+    ""build"": ""tsc -p tsconfig.build.json"",
+    ""start"": ""node dist/index.js"",
+    ""typecheck"": ""tsc --noEmit -p ."",
+    ""test"": ""vitest run --passWithNoTests"",
+    ""test:watch"": ""vitest""
+  },
+  ""dependencies"": {
+    ""dotenv"": ""^18.0.10"",
+    ""express"": ""^5.3.0"",
+    ""helmet"": ""^8.3.0"",
+    ""mongoose"": ""^9.12.1""
+  },
+  ""devDependencies"": {
+    ""@exquisite-chorus/shared"": ""*"",
+    ""@types/express"": ""^5.0.6"",
+    ""@types/node"": ""^24.19.2"",
+    ""@types/supertest"": ""^7.2.1"",
+    ""mongodb-memory-server"": ""^11.3.0"",
+    ""supertest"": ""^7.3.2"",
+    ""tsx"": ""^4.23.15"",
+    ""vitest"": ""^5.1.0""
+  }
+}"
+"7f52649e-627d-401a-acc3-e7173153ef14:0","2026-11-14T07:21:42.632Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","Postinstall blocked is fine (mongodb-memory-server downloads lazily on first start). Now test-first: config, setup, and tests."
+"dfb350d6-cf3f-4e0f-bbc3-95a3c3cdc5db:0","2026-11-14T07:21:46.900Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server\"" && sed -i 's/\""vitest run --passWithNoTests\""/\""vitest run\""/' package.json && mkdir -p test && cat > vitest.config.ts <<'EOF'\nimport { defineConfig } from 'vitest/config'\n\nexport default defineConfig({\n  test: {\n    environment: 'node',\n    include: ['src/**/*.test.ts', 'test/**/*.test.ts'],\n    setupFiles: ['test/setup.ts'],\n    // mongodb-memory-server downloads a mongod binary on its first run.\n    hookTimeout: 120_000,\n    testTimeout: 30_000,\n  },\n})\nEOF\ncat > test/setup.ts <<'EOF'\n// Starts one in-memory MongoDB per test file, connects Mongoose to it, and\n// clears every collection between tests. Tests never touch Atlas.\nimport { MongoMemoryServer } from 'mongodb-memory-server'\nimport mongoose from 'mongoose'\nimport { afterAll, afterEach, beforeAll } from 'vitest'\n\nlet mongod: MongoMemoryServer | undefined\n\nbeforeAll(async () => {\n  mongod = await MongoMemoryServer.create()\n  await mongoose.connect(mongod.getUri())\n})\n\nafterEach(async () => {\n  const { collections } = mongoose.connection\n  await Promise.all(Object.values(collections).map((c) => c.deleteMany({})))\n})\n\nafterAll(async () => {\n  await mongoose.disconnect()\n  await mongod?.stop()\n})\nEOF"", ""description"": ""Update vitest config and write test setup""}"
+"338ce672-7b03-40c3-9e1b-a5380c8b2bae:0","2026-11-14T07:21:47.089Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","(Bash completed with no output)"
+"0f3d7b26-8b3c-4bc7-85a0-61554aa8f1a3:0","2026-11-14T07:22:12.651Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\test\\app.test.ts"", ""content"": ""import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'\nimport { tmpdir } from 'node:os'\nimport path from 'node:path'\nimport { Router } from 'express'\nimport mongoose from 'mongoose'\nimport request from 'supertest'\nimport { afterAll, beforeAll, describe, expect, it } from 'vitest'\nimport { createApp } from '../src/app.js'\nimport { loadConfig } from '../src/config.js'\nimport { HttpError } from '../src/http.js'\n\nconst testConfig = loadConfig({ NODE_ENV: 'test' })\n\nconst productionEnv = {\n  NODE_ENV: 'production',\n  MONGODB_URI: 'mongodb://db.example/chorus',\n  SESSION_SECRET: 'x'.repeat(32),\n  APP_ORIGIN: 'https://chorus.example, https://www.chorus.example',\n  S3_BUCKET: 'chorus-audio',\n  AWS_REGION: 'us-east-2',\n}\n\n// Routes that exist only to exercise the error middleware.\nfunction throwingRouter() {\n  const router = Router()\n  router.get('/teapot', () => {\n    throw new HttpError(418, 'x')\n  })\n  router.get('/boom', async () => {\n    throw new Error('secret internal detail')\n  })\n  router.get('/validation', () => {\n    throw new mongoose.Error.ValidationError()\n  })\n  router.get('/duplicate', () => {\n    throw Object.assign(new Error('E11000 duplicate key'), { code: 11000 })\n  })\n  return router\n}\n\ndescribe('loadConfig', () => {\n  it('throws in production when SESSION_SECRET is shorter than 32 characters', () => {\n    expect(() => loadConfig({ ...productionEnv, SESSION_SECRET: 'tenchars!!' })).toThrow(\n      /SESSION_SECRET/,\n    )\n  })\n\n  it.each(['MONGODB_URI', 'SESSION_SECRET', 'APP_ORIGIN', 'S3_BUCKET', 'AWS_REGION'])(\n    'throws in production when %s is missing',\n    (name) => {\n      const env: Record<string, string | undefined> = { ...productionEnv }\n      delete env[name]\n      expect(() => loadConfig(env)).toThrow(new RegExp(name))\n    },\n  )\n\n  it('parses a complete production env', () => {\n    const config = loadConfig(productionEnv)\n    expect(config.nodeEnv).toBe('production')\n    expect(config.appOrigins).toEqual(['https://chorus.example', 'https://www.chorus.example'])\n    expect(config.trustProxy).toBe(1)\n    expect(config.s3Origin).toBe('https://chorus-audio.s3.us-east-2.amazonaws.com')\n  })\n\n  it('takes trust proxy as a hop count and never as true', () => {\n    expect(loadConfig({ ...productionEnv, TRUST_PROXY: '2' }).trustProxy).toBe(2)\n    expect(() => loadConfig({ ...productionEnv, TRUST_PROXY: 'true' })).toThrow(/TRUST_PROXY/)\n  })\n\n  it('uses development defaults without a bucket', () => {\n    const config = loadConfig({})\n    expect(config.nodeEnv).toBe('development')\n    expect(config.port).toBe(3000)\n    expect(config.trustProxy).toBe(false)\n    expect(config.s3Origin).toBeUndefined()\n    expect(config.appOrigins).toEqual(['http://localhost:5173'])\n  })\n})\n\ndescribe('createApp API', () => {\n  const app = createApp(testConfig, { clientDist: null, apiRouters: [throwingRouter()] })\n\n  it('GET /api/health returns the envelope with db state', async () => {\n    const res = await request(app).get('/api/health')\n    expect(res.status).toBe(200)\n    expect(res.body).toEqual({ message: 'OK', data: { db: 'connected' } })\n  })\n\n  it('GET /api/nope returns the 404 envelope', async () => {\n    const res = await request(app).get('/api/nope')\n    expect(res.status).toBe(404)\n    expect(res.body).toEqual({ message: 'Endpoint not found', data: null })\n  })\n\n  it('maps HttpError to its status and message', async () => {\n    const res = await request(app).get('/api/teapot')\n    expect(res.status).toBe(418)\n    expect(res.body).toEqual({ message: 'x', data: null })\n  })\n\n  it('maps an unexpected error to a generic 500 without internals', async () => {\n    const res = await request(app).get('/api/boom')\n    expect(res.status).toBe(500)\n    expect(res.body.data).toBeNull()\n    expect(JSON.stringify(res.body)).not.toMatch(/secret internal detail|at /)\n  })\n\n  it('maps a malformed JSON body to a 400 envelope', async () => {\n    const res = await request(app)\n      .post('/api/health')\n      .set('Content-Type', 'application/json')\n      .send('{\""oops\"":')\n    expect(res.status).toBe(400)\n    expect(res.body.data).toBeNull()\n    expect(typeof res.body.message).toBe('string')\n  })\n\n  it('maps a Mongoose validation error to 400 and a duplicate key to 409', async () => {\n    expect((await request(app).get('/api/validation')).status).toBe(400)\n    expect((await request(app).get('/api/duplicate')).status).toBe(409)\n  })\n\n  it('sets helmet headers with the S3 origin in media-src and connect-src', async () => {\n    const s3App = createApp(loadConfig({ ...productionEnv, NODE_ENV: 'test' }), {\n      clientDist: null,\n    })\n    const res = await request(s3App).get('/api/health')\n    expect(res.headers['x-content-type-options']).toBe('nosniff')\n    const csp = String(res.headers['content-security-policy'])\n    const directive = (name: string) =>\n      csp.split(';').map((d) => d.trim()).find((d) => d.startsWith(`${name} `)) ?? ''\n    const origin = 'https://chorus-audio.s3.us-east-2.amazonaws.com'\n    expect(directive('media-src')).toContain(origin)\n    expect(directive('media-src')).toContain('blob:')\n    expect(directive('connect-src')).toContain(origin)\n  })\n})\n\ndescribe('createApp SPA hosting', () => {\n  let dist: string\n\n  beforeAll(() => {\n    dist = mkdtempSync(path.join(tmpdir(), 'chorus-dist-'))\n    writeFileSync(path.join(dist, 'index.html'), '<!doctype html><title>Chorus SPA</title>')\n  })\n\n  afterAll(() => {\n    rmSync(dist, { recursive: true, force: true })\n  })\n\n  it('serves index.html for a client-side route', async () => {\n    const app = createApp(testConfig, { clientDist: dist })\n    const res = await request(app).get('/some/client/route')\n    expect(res.status).toBe(200)\n    expect(res.headers['content-type']).toMatch(/text\\/html/)\n    expect(res.text).toContain('Chorus SPA')\n  })\n\n  it('still returns the 404 envelope for unknown /api paths', async () => {\n    const app = createApp(testConfig, { clientDist: dist })\n    const res = await request(app).get('/api/nope')\n    expect(res.status).toBe(404)\n    expect(res.body).toEqual({ message: 'Endpoint not found', data: null })\n  })\n\n  it('skips static hosting when the client build is missing', async () => {\n    const app = createApp(testConfig, { clientDist: path.join(dist, 'does-not-exist') })\n    const res = await request(app).get('/some/client/route')\n    expect(res.status).toBe(404)\n  })\n})\n""}"
+"aaa38564-14df-4ea4-934f-ebd90d660114:0","2026-11-14T07:22:12.674Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\test\app.test.ts (file state is current in your context — no need to Read it back)"
+"ee4dfc6d-fe30-4a3d-8471-6b9d782496fd:0","2026-11-14T07:22:13.602Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && npm test -w server 2>&1 | tail -25"", ""description"": ""Run tests to observe red"", ""timeout"": 300000}"
+"429ec0ad-24a0-41b1-87bf-9cf23697a5ce:0","2026-11-14T07:22:15.415Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result"," FAIL  test/app.test.ts [ test/app.test.ts ]
+Error: Cannot find module '../src/app.js' imported from C:/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server/test/app.test.ts
+ ❯ test/app.test.ts:8:1
+      6| import request from 'supertest'
+      7| import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+      8| import { createApp } from '../src/app.js'
+       | ^
+      9| import { loadConfig } from '../src/config.js'
+     10| import { HttpError } from '../src/http.js'
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  01:22:14
+   Duration  888ms (setup 96%, transform 3%, worker 1%)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server
+npm error workspace @exquisite-chorus/[redacted-email]
+npm error location C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c vitest run"
+"3327b290-4c00-47ce-9421-2a691a5e178e:0","2026-11-14T07:22:16.723Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","Red observed (modules missing). Now implementing."
+"c841454e-4056-4318-8229-d62d15aececd:0","2026-11-14T07:22:27.888Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\config.ts"", ""content"": ""// Parses and validates environment variables into a typed config object.\n// In production, missing or weak settings stop the server at startup; in\n// development and test, sensible local defaults apply.\n\nexport type NodeEnv = 'development' | 'test' | 'production'\n\nexport interface Config {\n  nodeEnv: NodeEnv\n  port: number\n  mongodbUri: string\n  sessionSecret: string\n  /** Allowed browser origins, from comma-separated APP_ORIGIN. */\n  appOrigins: string[]\n  /** Number of reverse-proxy hops to trust, or false. Never `true`. */\n  trustProxy: number | false\n  aws: {\n    region: string\n    bucket: string\n    accessKeyId?: string\n    secretAccessKey?: string\n  }\n  /** `https://<bucket>.s3.<region>.amazonaws.com`, or undefined without a bucket. */\n  s3Origin?: string\n}\n\ntype Env = Record<string, string | undefined>\n\nconst MIN_SECRET_LENGTH = 32\n\nfunction value(env: Env, name: string): string | undefined {\n  const raw = env[name]?.trim()\n  return raw ? raw : undefined\n}\n\nfunction parseNodeEnv(raw: string | undefined): NodeEnv {\n  if (raw === undefined) return 'development'\n  if (raw === 'development' || raw === 'test' || raw === 'production') return raw\n  throw new Error(`NODE_ENV must be development, test or production (got \""${raw}\"")`)\n}\n\nfunction parsePort(raw: string | undefined): number {\n  if (raw === undefined) return 3000\n  const port = Number(raw)\n  if (!Number.isInteger(port) || port < 0 || port > 65535) {\n    throw new Error(`PORT must be an integer from 0 to 65535 (got \""${raw}\"")`)\n  }\n  return port\n}\n\nfunction parseTrustProxy(raw: string | undefined, nodeEnv: NodeEnv): number | false {\n  if (raw === undefined) return nodeEnv === 'production' ? 1 : false\n  if (raw === 'false') return false\n  if (!/^\\d+$/.test(raw)) {\n    throw new Error(`TRUST_PROXY must be a number of proxy hops or \""false\"" (got \""${raw}\"")`)\n  }\n  const hops = Number(raw)\n  return hops === 0 ? false : hops\n}\n\nexport function loadConfig(env: Env): Config {\n  const nodeEnv = parseNodeEnv(value(env, 'NODE_ENV'))\n  const production = nodeEnv === 'production'\n\n  if (production) {\n    const required = ['MONGODB_URI', 'SESSION_SECRET', 'APP_ORIGIN', 'S3_BUCKET', 'AWS_REGION']\n    const missing = required.filter((name) => value(env, name) === undefined)\n    if (missing.length > 0) {\n      throw new Error(`Missing required environment variables: ${missing.join(', ')}`)\n    }\n  }\n\n  const sessionSecret = value(env, 'SESSION_SECRET') ?? 'dev-only-session-secret-not-for-production'\n  if (production && sessionSecret.length < MIN_SECRET_LENGTH) {\n    throw new Error(`SESSION_SECRET must be at least ${MIN_SECRET_LENGTH} characters in production`)\n  }\n\n  const appOrigins = (value(env, 'APP_ORIGIN') ?? 'http://localhost:5173')\n    .split(',')\n    .map((origin) => origin.trim())\n    .filter((origin) => origin.length > 0)\n\n  const region = value(env, 'AWS_REGION') ?? 'us-east-2'\n  const bucket = value(env, 'S3_BUCKET') ?? ''\n\n  return {\n    nodeEnv,\n    port: parsePort(value(env, 'PORT')),\n    mongodbUri: value(env, 'MONGODB_URI') ?? 'mongodb://127.0.0.1:27017/exquisite-chorus',\n    sessionSecret,\n    appOrigins,\n    trustProxy: parseTrustProxy(value(env, 'TRUST_PROXY'), nodeEnv),\n    aws: {\n      region,\n      bucket,\n      accessKeyId: value(env, 'AWS_ACCESS_KEY_ID'),\n      secretAccessKey: value(env, 'AWS_SECRET_ACCESS_KEY'),\n    },\n    s3Origin: bucket ? `https://${bucket}.s3.${region}.amazonaws.com` : undefined,\n  }\n}\n""}"
+"4fd716e0-ab0f-4a8e-8b62-7fa94bcd3347:0","2026-11-14T07:22:27.908Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\config.ts (file state is current in your context — no need to Read it back)"
+"a20b29fb-b3ac-4932-946f-725d6b897683:0","2026-11-14T07:22:34.438Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\http.ts"", ""content"": ""// The response envelope, an error type that carries an HTTP status, and the\n// central error middleware. Ported from MP3's routes/helpers.js and\n// routes/index.js; Express 5 forwards async rejections, so no wrap() helper.\nimport type { ApiEnvelope } from '@exquisite-chorus/shared'\nimport type { ErrorRequestHandler, RequestHandler, Response } from 'express'\nimport mongoose from 'mongoose'\n\nexport class HttpError extends Error {\n  readonly status: number\n\n  constructor(status: number, message: string) {\n    super(message)\n    this.name = 'HttpError'\n    this.status = status\n  }\n}\n\nexport function respond<T>(res: Response, status: number, message: string, data?: T): void {\n  const body: ApiEnvelope<T | null> = { message, data: data === undefined ? null : data }\n  res.status(status).json(body)\n}\n\n/** Unknown endpoint under /api. */\nexport const apiNotFound: RequestHandler = (_req, res) => {\n  respond(res, 404, 'Endpoint not found')\n}\n\nfunction isRecord(value: unknown): value is Record<string, unknown> {\n  return typeof value === 'object' && value !== null\n}\n\n/** Every error becomes the JSON envelope; nothing internal reaches the client. */\nexport const errorHandler: ErrorRequestHandler = (err: unknown, _req, res, next) => {\n  if (res.headersSent) {\n    next(err)\n    return\n  }\n  if (err instanceof HttpError) {\n    respond(res, err.status, err.message)\n    return\n  }\n  if (isRecord(err) && err.type === 'entity.parse.failed') {\n    respond(res, 400, 'Request body is not valid JSON')\n    return\n  }\n  if (err instanceof mongoose.Error.ValidationError || err instanceof mongoose.Error.CastError) {\n    respond(res, 400, 'Invalid field value')\n    return\n  }\n  if (isRecord(err) && err.code === 11000) {\n    respond(res, 409, 'A record with that value already exists')\n    return\n  }\n  // body-parser errors other than bad JSON (e.g. payload too large) carry a 4xx status.\n  if (isRecord(err) && err.expose === true && typeof err.status === 'number' && err.status < 500) {\n    respond(res, err.status, typeof err.message === 'string' ? err.message : 'Bad request')\n    return\n  }\n  console.error(err)\n  respond(res, 500, 'Something went wrong on the server')\n}\n""}"
+"e73a99df-5447-45d0-9b3f-54909f55103b:0","2026-11-14T07:22:34.459Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\http.ts (file state is current in your context — no need to Read it back)"
+"53adc00f-4304-4e75-82e0-939b39e9e628:0","2026-11-14T07:22:36.639Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\db.ts"", ""content"": ""import mongoose from 'mongoose'\n\nexport async function connectDb(uri: string): Promise<typeof mongoose> {\n  return mongoose.connect(uri)\n}\n\nexport async function disconnectDb(): Promise<void> {\n  await mongoose.disconnect()\n}\n\nconst STATES: Record<number, string> = {\n  0: 'disconnected',\n  1: 'connected',\n  2: 'connecting',\n  3: 'disconnecting',\n}\n\n/** Human-readable Mongoose connection state for the health endpoint. */\nexport function dbState(): string {\n  return STATES[mongoose.connection.readyState] ?? 'unknown'\n}\n""}"
+"541cc70f-124b-4737-85fc-cd539b5cbbea:0","2026-11-14T07:22:36.660Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\db.ts (file state is current in your context — no need to Read it back)"
+"34770562-0d11-43de-b495-4faad477f126:0","2026-11-14T07:22:50.865Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\app.ts"", ""content"": ""// Builds the Express app without listening, so tests can drive it with\n// supertest. Everything stateful (routers, and later rate limiters) is created\n// per call; nothing leaks between app instances.\nimport { existsSync } from 'node:fs'\nimport path from 'node:path'\nimport { fileURLToPath } from 'node:url'\nimport express, { Router, type Express } from 'express'\nimport helmet from 'helmet'\nimport type { Config } from './config.js'\nimport { dbState } from './db.js'\nimport { apiNotFound, errorHandler, respond } from './http.js'\n\n/** client/dist, resolved from this file: works from server/src (tsx) and server/dist (compiled). */\nexport const DEFAULT_CLIENT_DIST = fileURLToPath(new URL('../../client/dist', import.meta.url))\n\nexport interface AppDeps {\n  /** Built SPA directory. `null` disables static hosting; a missing directory is skipped. */\n  clientDist?: string | null\n  /** Extra routers mounted under /api, after the built-in ones and before the /api 404. */\n  apiRouters?: Router[]\n}\n\nfunction healthRouter(): Router {\n  const router = Router()\n  router.get('/health', (_req, res) => {\n    respond(res, 200, 'OK', { db: dbState() })\n  })\n  return router\n}\n\nexport function createApp(config: Config, deps: AppDeps = {}): Express {\n  const app = express()\n\n  app.set('trust proxy', config.trustProxy)\n\n  const s3 = config.s3Origin ? [config.s3Origin] : []\n  app.use(\n    helmet({\n      contentSecurityPolicy: {\n        directives: {\n          mediaSrc: [\""'self'\"", 'blob:', ...s3],\n          connectSrc: [\""'self'\"", ...s3],\n        },\n      },\n    }),\n  )\n  app.use(express.json())\n\n  // API: feature routers (auth, recordings) mount here in later units.\n  app.use('/api', healthRouter())\n  for (const router of deps.apiRouters ?? []) app.use('/api', router)\n  app.use('/api', apiNotFound)\n\n  // SPA: static assets, then index.html for client-side routes. /api never\n  // reaches here because the /api 404 above ends every unmatched API request.\n  const clientDist = deps.clientDist === undefined ? DEFAULT_CLIENT_DIST : deps.clientDist\n  if (clientDist && existsSync(path.join(clientDist, 'index.html'))) {\n    app.use(express.static(clientDist))\n    app.get('/{*splat}', (_req, res, next) => {\n      res.sendFile('index.html', { root: clientDist }, (err) => {\n        if (err) next(err)\n      })\n    })\n  }\n\n  app.use(errorHandler)\n  return app\n}\n""}"
+"b91140ef-d59b-4562-9544-d95d072e6bf6:0","2026-11-14T07:22:50.885Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\app.ts (file state is current in your context — no need to Read it back)"
+"5f920e32-8420-42f8-b615-e1c548f67efb:0","2026-11-14T07:22:53.817Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\index.ts"", ""content"": ""// Server entry point: load env, validate config, connect to MongoDB, listen.\nimport 'dotenv/config'\nimport { createApp } from './app.js'\nimport { loadConfig } from './config.js'\nimport { connectDb } from './db.js'\n\nconst config = loadConfig(process.env)\n\ntry {\n  await connectDb(config.mongodbUri)\n  console.log('Connected to MongoDB')\n} catch (err) {\n  // In development the API still starts so the SPA can be checked without a\n  // database; /api/health reports the state. In production, fail fast.\n  if (config.nodeEnv === 'production') throw err\n  console.error('MongoDB connection failed; continuing without a database:', err)\n}\n\nconst app = createApp(config)\napp.listen(config.port, () => {\n  console.log(`Exquisite Chorus server listening on port ${config.port} (${config.nodeEnv})`)\n})\n""}"
+"ecfeabb5-6ff0-4be0-9dcf-c0bac4d46974:0","2026-11-14T07:22:53.847Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","The file C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\index.ts has been updated successfully. (file state is current in your context — no need to Read it back)"
+"cb0b8ce6-b75f-4cab-b456-9d3900564254:0","2026-11-14T07:22:57.249Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && sed -i 's|^APP_ORIGIN=http://localhost:5173$|APP_ORIGIN=http://localhost:5173\\n# Number of reverse-proxy hops to trust (Render: 1). Defaults to 1 in production, false otherwise. Never \""true\"".\\nTRUST_PROXY=|' .env.example && cat .env.example && npm test -w server 2>&1 | tail -30"", ""description"": ""Update env example and run server tests"", ""timeout"": 300000}"
+"c0d9bfce-e311-4a56-b299-26a70bc5acc2:0","2026-11-14T07:22:59.548Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","# Copy to .env and fill in. Never commit .env.
+NODE_ENV=development
+PORT=3000
+# Comma-separated list of allowed browser origins
+APP_ORIGIN=http://localhost:5173
+# Number of reverse-proxy hops to trust (Render: 1). Defaults to 1 in production, false otherwise. Never ""true"".
+TRUST_PROXY=
+MONGODB_URI=mongodb://localhost:27017/exquisite-chorus
+SESSION_SECRET=change-me-to-a-long-random-string
+AWS_REGION=us-east-2
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+S3_BUCKET=
+
+> @exquisite-chorus/[redacted-email] test
+> vitest run
+
+
+ RUN  v5.1.0 C:/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server
+
+
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+   Start at  01:22:58
+   Duration  1.33s (setup 47%, tests 38%, import 11%, transform 4%)"
+"028799e4-a912-4cfd-9c16-d0a08bc4f46f:0","2026-11-14T07:23:01.228Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","All 19 pass. Now the full gates."
+"e3f41528-37b3-4ed6-a467-dad040888500:0","2026-11-14T07:23:02.905Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && (npm run lint 2>&1 | tail -4; echo LINT=$?) && (npm run typecheck 2>&1 | tail -8) && (npm test 2>&1 | grep -E \""Tests|Test Files|error\"" ) && (npm run build 2>&1 | tail -6); ls server/dist"", ""description"": ""Run lint, typecheck, test, build"", ""timeout"": 300000}"
+"dda32844-29d7-4142-a8ac-150afd201036:0","2026-11-14T07:23:12.313Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","> [redacted-email] lint
+> oxlint
+
+LINT=0
+
+> @exquisite-chorus/[redacted-email] typecheck
+> tsc --noEmit -p .
+
+
+> @exquisite-chorus/[redacted-email] typecheck
+> tsc --noEmit -p .
+
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+
+[32m✓ built in 88ms[39m
+
+> @exquisite-chorus/[redacted-email] build
+> tsc -p tsconfig.build.json
+
+app.js
+app.js.map
+config.js
+config.js.map
+db.js
+db.js.map
+http.js
+http.js.map
+index.js
+index.js.map"
+"bad360c5-cec5-4f98-8c67-c05e1bbfa2ad:0","2026-11-14T07:23:14.818Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && for c in lint typecheck test build; do npm run $c >/dev/null 2>&1; echo \""$c exit=$?\""; done; npx oxlint 2>&1 | tail -3"", ""description"": ""Confirm exit codes of all gates"", ""timeout"": 300000}"
+"68e22d32-3d35-4733-941a-06eb60bc4f28:0","2026-11-14T07:23:24.997Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","lint exit=0
+typecheck exit=0
+test exit=0
+build exit=0"
+"6e1bc59c-2b1a-4a05-be0a-c78eba04de66:0","2026-11-14T07:23:29.658Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && npx oxlint; echo; cd server && (NODE_ENV=development PORT=3999 MONGODB_URI='mongodb://127.0.0.1:1/none?serverSelectionTimeoutMS=1500' node dist/index.js > /tmp/u2srv.log 2>&1 &) ; for i in 1 2 3 4 5 6 7 8; do curl -s -o /dev/null http://localhost:3999/api/health && break; sleep 1; done; echo \""--- /\""; curl -si http://localhost:3999/ | grep -iE \""^HTTP|content-type|content-security\"" ; curl -s http://localhost:3999/ | head -c 200; echo; echo \""--- /recordings\""; curl -si http://localhost:3999/recordings | grep -iE \""^HTTP|content-type\""; curl -s http://localhost:3999/recordings | grep -o '<title>.*</title>'; echo \""--- /api/nope\""; curl -si http://localhost:3999/api/nope | sed -n '1p;$p'; echo \""--- health\""; curl -s http://localhost:3999/api/health; echo; cat /tmp/u2srv.log | head -5"", ""description"": ""Start compiled server and curl endpoints"", ""timeout"": 60000}"
+"e4083f39-d93b-45df-9d80-4400de5e522c:0","2026-11-14T07:23:33.151Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","--- /
+HTTP/1.1 200 OK
+Content-Security-Policy: default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests;media-src 'self' blob:;connect-src 'self'
+X-Content-Type-Options: nosniff
+Content-Type: text/html; charset=utf-8
+<!doctype html>
+<html lang=""en"">
+  <head>
+    <meta charset=""UTF-8"" />
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"" />
+    <title>Exquisite Chorus</title>
+    <script type
+--- /recordings
+HTTP/1.1 200 OK
+X-Content-Type-Options: nosniff
+Content-Type: text/html; charset=utf-8
+<title>Exquisite Chorus</title>
+--- /api/nope
+HTTP/1.1 404 Not Found
+{""message"":""Endpoint not found"",""data"":null}--- health
+{""message"":""OK"",""data"":{""db"":""disconnected""}}
+MongoDB connection failed; continuing without a database: MongooseServerSelectionError: connect ECONNREFUSED 127.0.0.1:1
+    at _handleConnectionErrors (C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\node_modules\mongoose\lib\connection.js:1180:11)
+    at NativeConnection.openUri (C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\node_modules\mongoose\lib\connection.js:1111:11)
+    at async file:///C:/Users/User/Dropbox/UIUC/2026%20Fall/CS%20409%20Art%20of%20Web%20Programming/Project/server/dist/index.js:8:5 {
+  errorLabelSet: Set(0) {},"
+"051508b2-6def-4a92-af41-6acb01b2b569:0","2026-11-14T07:23:37.371Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && A=$(ls client/dist/assets | grep '\\.js$' | head -1); curl -si http://localhost:3999/assets/$A | grep -iE \""^HTTP|content-type\""; powershell -NoProfile -Command \""Get-NetTCPConnection -LocalPort 3999 -State Listen | ForEach-Object { Stop-Process -Id \\$_.OwningProcess -Force }\""; curl -s -m 2 http://localhost:3999/ || echo stopped; git status --short"", ""description"": ""Check asset serving, stop server, show status""}"
+"c418f6c6-aa50-4314-bbc6-1b870dfa6952:0","2026-11-14T07:23:41.239Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","HTTP/1.1 200 OK
+X-Content-Type-Options: nosniff
+Content-Type: text/javascript; charset=utf-8
+stopped
+ M .env.example
+ M llm_logs_raburt3.csv
+ M package-lock.json
+ M server/package.json
+ M server/src/index.ts
+ M server/vitest.config.ts
+?? server/src/app.ts
+?? server/src/config.ts
+?? server/src/db.ts
+?? server/src/http.ts
+?? server/test/"
+"7ce58e92-cb73-486d-b3e9-12802ed1b015:0","2026-11-14T07:23:59.351Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","U2 is implemented. Lint, typecheck, tests and build all pass from the repo root, and the compiled server serves the SPA and deep links correctly. Nothing is staged or committed.
+
+**(a) Files**
+- Created:
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\app.ts`
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\config.ts`
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\http.ts`
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\db.ts`
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\test\setup.ts`
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\test\app.test.ts`
+- Modified:
+  - `server\src\index.ts`: the placeholder is replaced with the real startup.
+  - `server\vitest.config.ts`: wires in `setupFiles`, `hookTimeout` 120s and `testTimeout` 30s.
+  - `server\package.json`:
+    - adds `helmet@^8.3.0`
+    - adds dev deps `supertest@^7.3.2`, `@types/supertest@^7.2.1`, `mongodb-memory-server@^11.3.0`
+    - drops `--passWithNoTests`
+  - `package-lock.json`
+  - `.env.example`: adds `TRUST_PROXY` with a comment.
+- `llm_logs_raburt3.csv` already showed as modified before I started; I didn't touch it.
+
+**How the extension point works:** `createApp(config, deps?)` takes `deps.clientDist` and `deps.apiRouters`.
+- `clientDist` set to `null` turns static hosting off. If it is left out, the app uses `client/dist`, found relative to the file, so it works from both `server/src` and `server/dist`. If that folder has no `index.html`, static hosting and the fallback are skipped.
+- `apiRouters` are mounted under `/api` before the `/api` 404. U3/U4 can add their routers inside `createApp` or pass them in here. Routers are built per call, so nothing is shared between app instances.
+
+**(b) Evidence**
+- **behavior_changed:** yes. The placeholder entry point became a working Express app with health, 404 envelope, error mapping, helmet/CSP, and SPA hosting with deep-link fallback.
+- **Red before implementing:** `npm test -w server` failed with `Cannot find module '../src/app.js'` (1 file failed, no tests ran).
+- **Tests added** (19 in `server/test/app.test.ts`):
+  - **`loadConfig`:**
+    - production with a 10-char `SESSION_SECRET` throws
+    - production throws when each of `MONGODB_URI`, `SESSION_SECRET`, `APP_ORIGIN`, `S3_BUCKET`, `AWS_REGION` is missing (5 cases)
+    - a complete production env parses: origins split on commas, trustProxy 1, `s3Origin` derived
+    - trust proxy is a hop count and `TRUST_PROXY=true` throws
+    - development defaults apply when no bucket is set
+  - **API:**
+    - `GET /api/health` returns 200 with `db: 'connected'`
+    - `GET /api/nope` returns the 404 envelope
+    - `HttpError(418,'x')` returns 418 `{message:'x', data:null}`
+    - an unexpected error returns a generic 500 with no internals
+    - malformed JSON returns a 400 envelope
+    - a Mongoose `ValidationError` returns 400 and a duplicate key (11000) returns 409
+    - helmet headers are set, and `media-src` and `connect-src` include the S3 origin (plus `blob:` in `media-src`)
+  - **SPA hosting:**
+    - a deep link returns `index.html` (200, `text/html`)
+    - `/api/nope` still returns the envelope when a built client exists
+    - a missing client build is skipped (plain 404)
+- **Commands** (repo root):
+  - `npm run lint`: exit 0
+  - `npm run typecheck`: exit 0
+  - `npm test`: exit 0 (server 19/19, client 1/1)
+  - `npm run build`: exit 0
+- **Manual check:** I built the client, then started `node server/dist/index.js` on port 3999 with `MONGODB_URI` pointed at an unreachable address.
+  - `GET /` returned 200 `text/html` (the built index.html, with the CSP header).
+  - `GET /recordings` returned 200 `text/html` with the same index.html.
+  - `GET /assets/*.js` returned 200 `text/javascript`.
+  - `GET /api/nope` returned 404 `{""message"":""Endpoint not found"",""data"":null}`.
+  - `GET /api/health` returned `{""message"":""OK"",""data"":{""db"":""disconnected""}}`.
+  - I stopped the server afterwards.
+
+**Deviations**
+- **Fallback route pattern:** I used `/{*splat}` instead of `/*splat`. It's still a named Express 5 wildcard but also matches `/` (express.static already serves `/`).
+- **Startup without a database:** `index.ts` keeps running if MongoDB is unreachable outside production, so the SPA can be checked without a database. In production it stops at startup.
+- **Extra error mapping:** the error handler also passes through body-parser's own 4xx errors (e.g. payload too large) instead of turning them into a 500.
+- **Install scripts were blocked:** npm's install-script gate blocked `mongodb-memory-server`'s postinstall. That's harmless: it fetches the mongod binary on first use, and here it was already cached, so tests ran in about 1s.
+- **Recent version:** `supertest` 7.3.2 was published a week ago, newer than the two-week rule of thumb. `^7.3.1` would resolve to it anyway.
+- **Expected test output:** the 500 test prints the thrown error to stderr. That's intended, since 500s are logged server-side."
+"da9be500-4e62-42cd-b1dc-697fa6b65cf7:0","2026-11-14T07:23:59.383Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","prompt","<task-notification>
+<task-id>a83c66c5513621287</task-id>
+<tool-use-id>toolu_01BpK1trtYB6A79mHxaqAgRB</tool-use-id>
+<output-file>C:\Users\User\AppData\Local\Temp\claude\8eeb967062a64003\e98c1602-5de1-48cb-b5cf-ad09189e70d7\tasks\a83c66c5513621287.output</output-file>
+<status>completed</status>
+<summary>Agent ""Implement U2 Express foundation"" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>U2 is implemented. Lint, typecheck, tests and build all pass from the repo root, and the compiled server serves the SPA and deep links correctly. Nothing is staged or committed.
+
+**(a) Files**
+- Created:
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\app.ts`
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\config.ts`
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\http.ts`
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\db.ts`
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\test\setup.ts`
+  - `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\test\app.test.ts`
+- Modified:
+  - `server\src\index.ts`: the placeholder is replaced with the real startup.
+  - `server\vitest.config.ts`: wires in `setupFiles`, `hookTimeout` 120s and `testTimeout` 30s.
+  - `server\package.json`:
+    - adds `helmet@^8.3.0`
+    - adds dev deps `supertest@^7.3.2`, `@types/supertest@^7.2.1`, `mongodb-memory-server@^11.3.0`
+    - drops `--passWithNoTests`
+  - `package-lock.json`
+  - `.env.example`: adds `TRUST_PROXY` with a comment.
+- `llm_logs_raburt3.csv` already showed as modified before I started; I didn't touch it.
+
+**How the extension point works:** `createApp(config, deps?)` takes `deps.clientDist` and `deps.apiRouters`.
+- `clientDist` set to `null` turns static hosting off. If it is left out, the app uses `client/dist`, found relative to the file, so it works from both `server/src` and `server/dist`. If that folder has no `index.html`, static hosting and the fallback are skipped.
+- `apiRouters` are mounted under `/api` before the `/api` 404. U3/U4 can add their routers inside `createApp` or pass them in here. Routers are built per call, so nothing is shared between app instances.
+
+**(b) Evidence**
+- **behavior_changed:** yes. The placeholder entry point became a working Express app with health, 404 envelope, error mapping, helmet/CSP, and SPA hosting with deep-link fallback.
+- **Red before implementing:** `npm test -w server` failed with `Cannot find module '../src/app.js'` (1 file failed, no tests ran).
+- **Tests added** (19 in `server/test/app.test.ts`):
+  - **`loadConfig`:**
+    - production with a 10-char `SESSION_SECRET` throws
+    - production throws when each of `MONGODB_URI`, `SESSION_SECRET`, `APP_ORIGIN`, `S3_BUCKET`, `AWS_REGION` is missing (5 cases)
+    - a complete production env parses: origins split on commas, trustProxy 1, `s3Origin` derived
+    - trust proxy is a hop count and `TRUST_PROXY=true` throws
+    - development defaults apply when no bucket is set
+  - **API:**
+    - `GET /api/health` returns 200 with `db: 'connected'`
+    - `GET /api/nope` returns the 404 envelope
+    - `HttpError(418,'x')` returns 418 `{message:'x', data:null}`
+    - an unexpected error returns a generic 500 with no internals
+    - malformed JSON returns a 400 envelope
+    - a Mongoose `ValidationError` returns 400 and a duplicate key (11000) returns 409
+    - helmet headers are set, and `media-src` and `connect-src` include the S3 origin (plus `blob:` in `media-src`)
+  - **SPA hosting:**
+    - a deep link returns `index.html` (200, `text/html`)
+    - `/api/nope` still returns the envelope when a built client exists
+    - a missing client build is skipped (plain 404)
+- **Commands** (repo root):
+  - `npm run lint`: exit 0
+  - `npm run typecheck`: exit 0
+  - `npm test`: exit 0 (server 19/19, client 1/1)
+  - `npm run build`: exit 0
+- **Manual check:** I built the client, then started `node server/dist/index.js` on port 3999 with `MONGODB_URI` pointed at an unreachable address.
+  - `GET /` returned 200 `text/html` (the built index.html, with the CSP header).
+  - `GET /recordings` returned 200 `text/html` with the same index.html.
+  - `GET /assets/*.js` returned 200 `text/javascript`.
+  - `GET /api/nope` returned 404 `{""message"":""Endpoint not found"",""data"":null}`.
+  - `GET /api/health` returned `{""message"":""OK"",""data"":{""db"":""disconnected""}}`.
+  - I stopped the server afterwards.
+
+**Deviations**
+- **Fallback route pattern:** I used `/{*splat}` instead of `/*splat`. It's still a named Express 5 wildcard but also matches `/` (express.static already serves `/`).
+- **Startup without a database:** `index.ts` keeps running if MongoDB is unreachable outside production, so the SPA can be checked without a database. In production it stops at startup.
+- **Extra error mapping:** the error handler also passes through body-parser's own 4xx errors (e.g. payload too large) instead of turning them into a 500.
+- **Install scripts were blocked:** npm's install-script gate blocked `mongodb-memory-server`'s postinstall. That's harmless: it fetches the mongod binary on first use, and here it was already cached, so tests ran in about 1s.
+- **Recent version:** `supertest` 7.3.2 was published a week ago, newer than the two-week rule of thumb. `^7.3.1` would resolve to it anyway.
+- **Expected test output:** the 500 test prints the thrown error to stderr. That's intended, since 500s are logged server-side.</result>
+<usage><subagent_tokens>71779</subagent_tokens><tool_uses>20</tool_uses><duration_ms>187053</duration_ms></usage>
+</task-notification>"
+"923394e7-05d9-440c-98bf-776514e65ba7:0","2026-11-14T07:24:02.786Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\""; git status --short; (npm run lint && npm run typecheck && npm test && npm run build) > \""$TEMP/u2.log\"" 2>&1; echo \""gates exit=$?\""; grep -E \""Tests |passed|failed\"" \""$TEMP/u2.log\"" | head; sed -n 1,200p server/src/app.ts"", ""description"": ""Run gates and review U2 app factory"", ""timeout"": 300000}"
+"c44fa0aa-5bcb-47aa-95f9-476438219866:0","2026-11-14T07:24:11.710Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result"," M .env.example
+ M llm_logs_raburt3.csv
+ M package-lock.json
+ M server/package.json
+ M server/src/index.ts
+ M server/vitest.config.ts
+?? server/src/app.ts
+?? server/src/config.ts
+?? server/src/db.ts
+?? server/src/http.ts
+?? server/test/
+gates exit=0
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+// Builds the Express app without listening, so tests can drive it with
+// supertest. Everything stateful (routers, and later rate limiters) is created
+// per call; nothing leaks between app instances.
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import express, { Router, type Express } from 'express'
+import helmet from 'helmet'
+import type { Config } from './config.js'
+import { dbState } from './db.js'
+import { apiNotFound, errorHandler, respond } from './http.js'
+
+/** client/dist, resolved from this file: works from server/src (tsx) and server/dist (compiled). */
+export const DEFAULT_CLIENT_DIST = fileURLToPath(new URL('../../client/dist', import.meta.url))
+
+export interface AppDeps {
+  /** Built SPA directory. `null` disables static hosting; a missing directory is skipped. */
+  clientDist?: string | null
+  /** Extra routers mounted under /api, after the built-in ones and before the /api 404. */
+  apiRouters?: Router[]
+}
+
+function healthRouter(): Router {
+  const router = Router()
+  router.get('/health', (_req, res) => {
+    respond(res, 200, 'OK', { db: dbState() })
+  })
+  return router
+}
+
+export function createApp(config: Config, deps: AppDeps = {}): Express {
+  const app = express()
+
+  app.set('trust proxy', config.trustProxy)
+
+  const s3 = config.s3Origin ? [config.s3Origin] : []
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          mediaSrc: [""'self'"", 'blob:', ...s3],
+          connectSrc: [""'self'"", ...s3],
+        },
+      },
+    }),
+  )
+  app.use(express.json())
+
+  // API: feature routers (auth, recordings) mount here in later units.
+  app.use('/api', healthRouter())
+  for (const router of deps.apiRouters ?? []) app.use('/api', router)
+  app.use('/api', apiNotFound)
+
+  // SPA: static assets, then index.html for client-side routes. /api never
+  // reaches here because the /api 404 above ends every unmatched API request.
+  const clientDist = deps.clientDist === undefined ? DEFAULT_CLIENT_DIST : deps.clientDist
+  if (clientDist && existsSync(path.join(clientDist, 'index.html'))) {
+    app.use(express.static(clientDist))
+    app.get('/{*splat}', (_req, res, next) => {
+      res.sendFile('index.html', { root: clientDist }, (err) => {
+        if (err) next(err)
+      })
+    })
+  }
+
+  app.use(errorHandler)
+  return app
+}"
