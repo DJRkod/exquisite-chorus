@@ -1,0 +1,83 @@
+// Typed fetch wrapper for the same-origin API (KTD2). Every response body is
+// the server's { message, data } envelope; success resolves to data, failure
+// rejects with an ApiError.
+import type { ApiEnvelope, PublicUser, SignInRequest, SignUpRequest } from '@exquisite-chorus/shared'
+
+export const DEFAULT_TIMEOUT_MS = 15_000
+/** Render's free tier can take most of a minute to wake from a cold start. */
+export const HEALTH_TIMEOUT_MS = 90_000
+
+export type ApiErrorKind = 'http' | 'network' | 'timeout'
+
+export class ApiError extends Error {
+  /** HTTP status, or 0 when no response arrived. */
+  readonly status: number
+  readonly kind: ApiErrorKind
+
+  constructor(status: number, message: string, kind: ApiErrorKind) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.kind = kind
+  }
+}
+
+export interface RequestOptions {
+  timeoutMs?: number
+}
+
+async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T> | undefined> {
+  try {
+    return (await response.json()) as ApiEnvelope<T>
+  } catch {
+    return undefined
+  }
+}
+
+export async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  { timeoutMs = DEFAULT_TIMEOUT_MS }: RequestOptions = {},
+): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const init: RequestInit = { method, credentials: 'same-origin', signal: controller.signal }
+  if (body !== undefined) {
+    init.headers = { 'Content-Type': 'application/json' }
+    init.body = JSON.stringify(body)
+  }
+
+  let response: Response
+  try {
+    response = await fetch(path, init)
+  } catch {
+    clearTimeout(timer)
+    if (controller.signal.aborted) {
+      throw new ApiError(0, 'The server took too long to answer', 'timeout')
+    }
+    throw new ApiError(0, "Couldn't reach the server. Check your connection.", 'network')
+  }
+
+  try {
+    if (response.status === 204) return undefined as T
+    const envelope = await readEnvelope<T>(response)
+    if (!response.ok) {
+      const message = typeof envelope?.message === 'string' ? envelope.message : `Request failed (${response.status})`
+      throw new ApiError(response.status, message, 'http')
+    }
+    return envelope?.data as T
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+export interface Health {
+  db: string
+}
+
+export const getHealth = () => request<Health>('GET', '/api/health', undefined, { timeoutMs: HEALTH_TIMEOUT_MS })
+export const getMe = () => request<PublicUser>('GET', '/api/auth/me')
+export const signUp = (input: SignUpRequest) => request<PublicUser>('POST', '/api/auth/signup', input)
+export const signIn = (input: SignInRequest) => request<PublicUser>('POST', '/api/auth/login', input)
+export const signOut = () => request<void>('POST', '/api/auth/logout')

@@ -1,0 +1,53 @@
+/* Minimal, functional styling. Visual design belongs to later plans. */
+:root {
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  padding: 0 16px;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid currentColor;
+}
+
+.app-name {
+  font-weight: bold;
+  margin-right: auto;
+}
+
+.auth-page {
+  max-width: 24rem;
+  margin: 2rem auto;
+}
+
+.auth-page form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.auth-page button {
+  margin-top: 0.75rem;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.form-error {
+  color: #c62828;
+}
+
+.wake-banner p {
+  margin: 1rem 0;
+}
