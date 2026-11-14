@@ -1,9 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { envelope, type Reply, type Routes } from '../test/fakeApi.ts'
 import { domError, FakeAudioContext, FakeMediaRecorder, FakeXHR, installMedia } from '../test/fakeMedia.ts'
 import { renderApp } from '../test/renderApp.tsx'
+import { RECORDING_FAILED } from './recorder.ts'
 
 const ADA = { id: 'u1', email: 'ada@example.com', displayName: 'Ada Lovelace' }
 const S3 = 'https://bucket.s3.example.com/'
@@ -44,6 +45,16 @@ const confirmed = (contentType = 'audio/mpeg') =>
 const mp3 = () => new File(['mp3-bytes'], 'song.mp3', { type: 'audio/mpeg' })
 const rows = () => within(screen.getByRole('list', { name: 'Recordings' })).getAllByRole('listitem')
 const rowFor = (name: string) => rows().find((row) => within(row).queryByText(name))!
+/** Lets pending promises, fake fetches, and React updates run. */
+const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+
+/** A route that answers only when released. */
+function held(reply: Reply) {
+  let release: () => void = () => {}
+  const route = () => new Promise<Reply>((resolve) => (release = () => resolve(reply)))
+  return { route, release: () => release() }
+}
+
 const calls = (fetch: ReturnType<typeof renderApp>['fetch'], key: string) =>
   fetch.mock.calls.filter(([input, init]) => `${init?.method ?? 'GET'} ${String(input)}` === key)
 
@@ -145,6 +156,36 @@ describe('RecordingsPage capture and upload', () => {
     expect((FakeXHR.instances[0].body!.get('file') as File).type).toBe('audio/webm;codecs=opus')
   })
 
+  it('releases the mic when the page unmounts while permission is pending', async () => {
+    let grant: () => void = () => {}
+    media.getUserMedia.mockImplementationOnce(
+      () => new Promise<MediaStream>((resolve) => (grant = () => resolve(media.stream))),
+    )
+    const { unmount } = page()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Record' }))
+    expect(media.getUserMedia).toHaveBeenCalled()
+
+    unmount()
+    grant()
+
+    await waitFor(() => expect(media.track.stop).toHaveBeenCalled())
+  })
+
+  it('shows the recording-failed notice and returns to idle when the recorder errors', async () => {
+    page()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Record' }))
+    const stop = await screen.findByRole('button', { name: 'Stop' })
+
+    act(() => FakeMediaRecorder.instances[0].fail())
+    await user.click(stop)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(RECORDING_FAILED)
+    expect(screen.getByRole('button', { name: 'Record' })).toBeEnabled()
+    expect(screen.queryByText('Preparing the take…')).not.toBeInTheDocument()
+  })
+
   it.each([
     ['a 25 MB file', () => Object.defineProperty(mp3(), 'size', { value: 25 * 1024 * 1024 }), /over 20 MB/],
     ['a video file', () => new File(['v'], 'clip.mp4', { type: 'video/mp4' }), /audio file/],
@@ -227,6 +268,70 @@ describe('RecordingsPage playback', () => {
     expect(await within(rowFor('Grace Hopper')).findByRole('button', { name: /^Stop/ })).toBeInTheDocument()
     expect(calls(fetch, 'GET /api/recordings/g1/playback-url')).toHaveLength(2)
     expect(media.play).toHaveBeenCalledTimes(3) // silent unlock + two real attempts
+  })
+
+  it('plays only the latest row when Play on row B supersedes row A’s pending URL', async () => {
+    const played: string[] = []
+    media.play.mockImplementation(function (this: HTMLMediaElement) {
+      played.push(this.src)
+      return Promise.resolve()
+    })
+    const grace = held(envelope(200, 'OK', { url: 'https://s3/g1', expiresAt: 'x' }))
+    page({ 'GET /api/recordings/g1/playback-url': grace.route })
+    const user = userEvent.setup()
+    await screen.findByText('Grace Hopper')
+    const audio = document.querySelector('audio[hidden]') as HTMLAudioElement
+
+    await user.click(within(rowFor('Grace Hopper')).getByRole('button', { name: /^Play/ }))
+    await user.click(within(rowFor('Alan Turing')).getByRole('button', { name: /^Play/ }))
+    expect(await within(rowFor('Alan Turing')).findByRole('button', { name: /^Stop/ })).toBeInTheDocument()
+
+    grace.release()
+    await settle()
+
+    expect(audio.src).toBe('https://s3/a1')
+    expect(played).not.toContain('https://s3/g1')
+    expect(within(rowFor('Grace Hopper')).getByRole('button', { name: /^Play/ })).toBeEnabled()
+    expect(within(rowFor('Alan Turing')).getByRole('button', { name: /^Stop/ })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('starts no group when a row Play interrupts a Play together load', async () => {
+    const alanBytes = held({ status: 200, body: 'bytes' })
+    page({ 'GET https://s3/a1': alanBytes.route })
+    const user = userEvent.setup()
+    await screen.findByText('Grace Hopper')
+    await user.click(within(rowFor('Grace Hopper')).getByRole('checkbox'))
+    await user.click(within(rowFor('Alan Turing')).getByRole('checkbox'))
+
+    await user.click(screen.getByRole('button', { name: 'Play together' }))
+    expect(await screen.findByText('Loading recordings to play together…')).toBeInTheDocument()
+    await user.click(within(rowFor('Grace Hopper')).getByRole('button', { name: /^Play/ }))
+    alanBytes.release()
+    await settle()
+
+    expect(FakeAudioContext.instances[0].sources).toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Play together' })).toBeEnabled()
+    expect(within(rowFor('Grace Hopper')).getByRole('button', { name: /^Stop/ })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('ignores the silent unlock clip ending while the URL is pending, then shows Stop', async () => {
+    const grace = held(envelope(200, 'OK', { url: 'https://s3/g1', expiresAt: 'x' }))
+    page({ 'GET /api/recordings/g1/playback-url': grace.route })
+    const user = userEvent.setup()
+    await screen.findByText('Grace Hopper')
+    const audio = document.querySelector('audio[hidden]') as HTMLAudioElement
+
+    await user.click(within(rowFor('Grace Hopper')).getByRole('button', { name: /^Play/ }))
+    expect(audio.src).toMatch(/^blob:/)
+    act(() => {
+      audio.dispatchEvent(new Event('ended'))
+    })
+    expect(within(rowFor('Grace Hopper')).getByRole('button', { name: /^Loading/ })).toBeDisabled()
+
+    grace.release()
+    expect(await within(rowFor('Grace Hopper')).findByRole('button', { name: /^Stop/ })).toBeInTheDocument()
   })
 
   it('plays two selected recordings starting together, then stops them', async () => {

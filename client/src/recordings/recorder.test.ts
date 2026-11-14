@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { domError, fakeStream, FakeMediaRecorder } from '../test/fakeMedia.ts'
-import { MIC_BLOCKED, NO_MIC, pickMimeType, RecorderError, startRecording } from './recorder.ts'
+import { MIC_BLOCKED, NO_MIC, pickMimeType, RecorderError, startRecording, type Take } from './recorder.ts'
 
 const only = (...types: string[]) => (type: string) => types.includes(type)
 
@@ -69,6 +69,33 @@ describe('startRecording', () => {
     expect(take.blob.type).toBe('audio/webm;codecs="opus"')
     expect(take.blob.size).toBeGreaterThan(0)
     expect(take.durationMs).toBe(3250)
+    expect(track.stop).toHaveBeenCalled()
+  })
+
+  /** Settles within 100 ms, or reports 'pending'. */
+  const settled = <T>(promise: Promise<T>) =>
+    Promise.race([promise, new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 100))])
+
+  it('resolves stop() with the take when the recorder already ended on its own (mic track ended)', async () => {
+    const { stream, track } = fakeStream()
+    const active = await startRecording({ getUserMedia: vi.fn().mockResolvedValue(stream), MediaRecorder: Recorder })
+    FakeMediaRecorder.instances[0].stop() // the browser ends the recording itself
+
+    const take = await settled(active.stop())
+
+    expect(take).not.toBe('pending')
+    expect((take as Take).blob.size).toBeGreaterThan(0)
+    expect(track.stop).toHaveBeenCalled()
+  })
+
+  it('rejects stop() with a RecorderError when the recorder errors', async () => {
+    const { stream, track } = fakeStream()
+    const active = await startRecording({ getUserMedia: vi.fn().mockResolvedValue(stream), MediaRecorder: Recorder })
+    FakeMediaRecorder.instances[0].fail()
+
+    const result = await settled(active.stop().catch((err: unknown) => err))
+
+    expect(result).toBeInstanceOf(RecorderError)
     expect(track.stop).toHaveBeenCalled()
   })
 })

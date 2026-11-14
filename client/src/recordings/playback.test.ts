@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FakeAudioContext } from '../test/fakeMedia.ts'
-import { loadGroup, playTrack, START_DELAY_S, startGroup, TrackLoadError } from './playback.ts'
+import { isUnlockClip, loadGroup, playTrack, START_DELAY_S, startGroup, TrackLoadError } from './playback.ts'
 
 function fakeAudio(failures: number) {
   let left = failures
@@ -53,6 +53,45 @@ describe('playTrack', () => {
     await expect(playTrack(audio as unknown as HTMLAudioElement, fetchUrl)).rejects.toThrow()
     expect(fetchUrl).toHaveBeenCalledTimes(2)
   })
+
+  it('stops without touching the element or refreshing the URL when aborted while the URL is pending', async () => {
+    const audio = fakeAudio(0)
+    let release: (url: string) => void = () => {}
+    const fetchUrl = vi.fn(() => new Promise<string>((resolve) => (release = resolve)))
+    const controller = new AbortController()
+
+    const playing = playTrack(audio as unknown as HTMLAudioElement, fetchUrl, controller.signal)
+    const unlockSrc = audio.src
+    controller.abort()
+    release('https://s3/x')
+
+    await expect(playing).rejects.toMatchObject({ name: 'AbortError' })
+    expect(audio.src).toBe(unlockSrc)
+    expect(fetchUrl).toHaveBeenCalledTimes(1)
+    expect(audio.play).toHaveBeenCalledTimes(1) // only the silent unlock
+  })
+
+  it('rethrows an AbortError from play() without refreshing the URL', async () => {
+    const audio = fakeAudio(0)
+    audio.play = vi.fn(async () => {
+      if (audio.src.startsWith('blob:')) return
+      throw new DOMException('interrupted by a new load request', 'AbortError')
+    })
+    const fetchUrl = vi.fn().mockResolvedValue('https://s3/x')
+
+    await expect(playTrack(audio as unknown as HTMLAudioElement, fetchUrl)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchUrl).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports when the element is playing the silent unlock clip', async () => {
+    const audio = fakeAudio(0)
+    let release: (url: string) => void = () => {}
+    const playing = playTrack(audio as unknown as HTMLAudioElement, () => new Promise<string>((r) => (release = r)))
+    expect(isUnlockClip(audio as unknown as HTMLAudioElement)).toBe(true)
+    release('https://s3/x')
+    await playing
+    expect(isUnlockClip(audio as unknown as HTMLAudioElement)).toBe(false)
+  })
 })
 
 describe('play together', () => {
@@ -91,5 +130,21 @@ describe('play together', () => {
     expect((err as TrackLoadError).track).toEqual(tracks[1])
     expect(fetchUrl.mock.calls.filter(([id]) => id === 'b')).toHaveLength(2)
     expect(ctx.sources).toHaveLength(0)
+  })
+
+  it('stops fetching and decoding when the caller aborts, rejecting with an AbortError', async () => {
+    const ctx = new FakeAudioContext()
+    const controller = new AbortController()
+    let release: (url: string) => void = () => {}
+    const fetchUrl = vi.fn(() => new Promise<string>((resolve) => (release = resolve)))
+    const fetch = vi.fn(async () => new Response('bytes'))
+
+    const loading = loadGroup(ctx as unknown as AudioContext, tracks, { fetchUrl, fetch }, controller.signal)
+    controller.abort()
+    release('https://s3/late')
+
+    await expect(loading).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetch).not.toHaveBeenCalled()
+    expect(ctx.decodeAudioData).not.toHaveBeenCalled()
   })
 })

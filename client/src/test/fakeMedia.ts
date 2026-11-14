@@ -32,13 +32,21 @@ export class FakeMediaRecorder extends EventTarget {
     this.dispatchEvent(new Event('start'))
   }
 
+  /** Like a browser, stopping an inactive recorder does nothing. */
   stop() {
+    if (this.state === 'inactive') return
     this.state = 'inactive'
     const data = Object.assign(new Event('dataavailable'), {
       data: new Blob(['take-bytes'], { type: this.mimeType }),
     })
     this.dispatchEvent(data)
     this.dispatchEvent(new Event('stop'))
+  }
+
+  /** A recording error: the recorder goes inactive and fires 'error'. */
+  fail() {
+    this.state = 'inactive'
+    this.dispatchEvent(new Event('error'))
   }
 }
 
@@ -163,7 +171,7 @@ export function installMedia({ durationSeconds = 3.2 }: { durationSeconds?: numb
     put(URL, 'createObjectURL', saved.createObjectURL)
     put(URL, 'revokeObjectURL', saved.revokeObjectURL)
   }
-  return { getUserMedia, track, play, pause, createObjectURL, revokeObjectURL, restore }
+  return { getUserMedia, stream, track, play, pause, createObjectURL, revokeObjectURL, restore }
 }
 
 /** A DOMException-like error with the given name, as getUserMedia rejects. */

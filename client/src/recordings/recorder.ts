@@ -101,22 +101,36 @@ export async function startRecording(deps: RecorderDeps = {}): Promise<ActiveRec
   })
   const mimeType = recorder.mimeType || picked || 'audio/webm'
 
+  // Built whenever the recorder stops, including on its own (e.g. the mic
+  // track ended), so stop() works even after the recorder went inactive.
+  const take = new Promise<Take>((resolve, reject) => {
+    recorder.addEventListener(
+      'stop',
+      () => {
+        const durationMs = toDurationMs(now() - startedAt)
+        stopTracks(stream)
+        const blob = new Blob(chunks, { type: mimeType })
+        resolve({ blob, contentType: mimeType, ...(durationMs === undefined ? {} : { durationMs }) })
+      },
+      { once: true },
+    )
+    recorder.addEventListener(
+      'error',
+      () => {
+        stopTracks(stream)
+        reject(new RecorderError(RECORDING_FAILED))
+      },
+      { once: true },
+    )
+  })
+  // A take that is never asked for must not surface as an unhandled rejection.
+  take.catch(() => {})
+
   return {
     mimeType,
     stop() {
-      return new Promise<Take>((resolve) => {
-        recorder.addEventListener(
-          'stop',
-          () => {
-            const durationMs = toDurationMs(now() - startedAt)
-            stopTracks(stream)
-            const blob = new Blob(chunks, { type: mimeType })
-            resolve({ blob, contentType: mimeType, ...(durationMs === undefined ? {} : { durationMs }) })
-          },
-          { once: true },
-        )
-        recorder.stop()
-      })
+      if (recorder.state !== 'inactive') recorder.stop()
+      return take
     },
     cancel() {
       if (recorder.state !== 'inactive') recorder.stop()

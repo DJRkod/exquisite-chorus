@@ -9,6 +9,7 @@ import { errorMessage, GENERIC_ERROR } from '../auth/errorMessage.ts'
 import { useAuth } from '../auth/useAuth.ts'
 import {
   audioContextClass,
+  isUnlockClip,
   loadGroup,
   playTrack,
   startGroup,
@@ -86,6 +87,10 @@ export default function RecordingsPage() {
   const audioRef = useRef<HTMLAudioElement>(null)
   const ctxRef = useRef<AudioContext | null>(null)
   const groupRef = useRef<PlayingGroup | null>(null)
+  // The latest playback request: Stop, a newer Play, or unmounting bumps the
+  // token and aborts the pending load, so a superseded request changes nothing.
+  const playToken = useRef(0)
+  const pendingPlay = useRef<AbortController | null>(null)
   const mounted = useRef(true)
 
   // Release the mic, the preview URL, and any playing audio on the way out.
@@ -93,6 +98,8 @@ export default function RecordingsPage() {
     mounted.current = true
     return () => {
       mounted.current = false
+      playToken.current += 1
+      pendingPlay.current?.abort()
       activeRef.current?.cancel()
       if (previewRef.current) URL.revokeObjectURL(previewRef.current)
       groupRef.current?.stop()
@@ -133,7 +140,13 @@ export default function RecordingsPage() {
     setNotice(null)
     setCapture({ step: 'starting' })
     try {
-      activeRef.current = await startRecording()
+      const active = await startRecording()
+      // Unmounted while the permission prompt was open: release the mic.
+      if (!mounted.current) {
+        active.cancel()
+        return
+      }
+      activeRef.current = active
       setCapture({ step: 'recording', startedAt: Date.now() })
     } catch (err) {
       setNotice(err instanceof RecorderError ? err.message : RECORDING_FAILED)
@@ -146,7 +159,15 @@ export default function RecordingsPage() {
     activeRef.current = null
     if (!active) return
     setCapture({ step: 'preparing' })
-    const take = await active.stop()
+    let take: Take
+    try {
+      take = await active.stop()
+    } catch {
+      if (!mounted.current) return
+      setNotice(RECORDING_FAILED)
+      setCapture({ step: 'idle' })
+      return
+    }
     if (mounted.current) showTake(take)
   }
 
@@ -201,12 +222,29 @@ export default function RecordingsPage() {
 
   // ---- playback ----
 
+  /** Supersedes any in-flight play request; returns the new request's token. */
+  function cancelPendingPlay(): number {
+    pendingPlay.current?.abort()
+    pendingPlay.current = null
+    return ++playToken.current
+  }
+
+  /** A fresh request: its token and the signal that cancels it. */
+  function beginPlay() {
+    const token = cancelPendingPlay()
+    const controller = new AbortController()
+    pendingPlay.current = controller
+    return { token, signal: controller.signal, current: () => token === playToken.current }
+  }
+
   function stopSingle() {
+    cancelPendingPlay()
     audioRef.current?.pause()
     setSingle(null)
   }
 
   function stopTogether() {
+    cancelPendingPlay()
     groupRef.current?.stop()
     groupRef.current = null
     setTogether('idle')
@@ -221,14 +259,18 @@ export default function RecordingsPage() {
     }
     stopTogether()
     audio.pause()
+    const request = beginPlay()
     setPlayError(null)
     setSingle({ id: rec.id, phase: 'loading' })
     try {
-      await playTrack(audio, () => fetchPlaybackUrl(rec.id))
-      if (mounted.current) setSingle((s) => (s?.id === rec.id ? { id: rec.id, phase: 'playing' } : s))
+      await playTrack(audio, () => fetchPlaybackUrl(rec.id), request.signal)
+      if (!request.current()) return
+      pendingPlay.current = null
+      setSingle({ id: rec.id, phase: 'playing' })
     } catch {
-      if (!mounted.current) return
-      setSingle((s) => (s?.id === rec.id ? null : s))
+      if (!request.current()) return
+      pendingPlay.current = null
+      setSingle(null)
       setPlayError(`Couldn't play ${describe(rec)}. Try again.`)
     }
   }
@@ -249,19 +291,25 @@ export default function RecordingsPage() {
     void ctx.resume()
 
     stopSingle()
+    const request = beginPlay()
     setPlayError(null)
     setTogether('loading')
     const tracks = items.map((rec) => ({ id: rec.id, label: describe(rec) }))
     try {
-      const buffers = await loadGroup(ctx, tracks, { fetchUrl: fetchPlaybackUrl })
-      if (!mounted.current) return
-      groupRef.current = startGroup(ctx, buffers, () => {
+      const buffers = await loadGroup(ctx, tracks, { fetchUrl: fetchPlaybackUrl }, request.signal)
+      // Stopped, superseded, or unmounted while loading: start nothing.
+      if (!request.current()) return
+      pendingPlay.current = null
+      const group = startGroup(ctx, buffers, () => {
+        if (groupRef.current !== group) return
         groupRef.current = null
         if (mounted.current) setTogether('idle')
       })
+      groupRef.current = group
       setTogether('playing')
     } catch (err) {
-      if (!mounted.current) return
+      if (!request.current()) return
+      pendingPlay.current = null
       setTogether('idle')
       setPlayError(
         err instanceof TrackLoadError
@@ -382,7 +430,14 @@ export default function RecordingsPage() {
           </p>
         )}
         {/* One shared element for single-track playback. */}
-        <audio ref={audioRef} hidden onEnded={() => setSingle(null)} />
+        <audio
+          ref={audioRef}
+          hidden
+          onEnded={(event) => {
+            // The Safari unlock's silent clip ends too; that is not the recording.
+            if (!isUnlockClip(event.currentTarget)) setSingle(null)
+          }}
+        />
 
         {list.status === 'loading' && <p role="status">Loading recordings…</p>}
         {list.status === 'error' && (

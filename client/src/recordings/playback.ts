@@ -16,15 +16,42 @@ export function audioContextClass(): typeof AudioContext | undefined {
 
 type Playable = Pick<HTMLAudioElement, 'play' | 'addEventListener' | 'removeEventListener'> & { src: string }
 
-/** Plays once: resolves when playback starts, rejects on a media error or a refused play(). */
-function attempt(audio: Playable, url: string): Promise<void> {
+function abortError(): DOMException {
+  return new DOMException('Playback was cancelled', 'AbortError')
+}
+
+const isAbort = (err: unknown) => (err as { name?: unknown } | null)?.name === 'AbortError'
+
+/** Rejects with an AbortError as soon as `signal` aborts, instead of waiting for `promise`. */
+function unlessAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise
+  if (signal.aborted) return Promise.reject(abortError())
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError())
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+  })
+}
+
+/**
+ * Plays once: resolves when playback starts, rejects on a media error, a
+ * refused play(), or an abort (without touching the element if already aborted).
+ */
+function attempt(audio: Playable, url: string, signal?: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError())
+      return
+    }
     const settle = (fn: () => void) => {
       audio.removeEventListener('error', onError)
+      signal?.removeEventListener('abort', onAbort)
       fn()
     }
     const onError = () => settle(() => reject(new Error('The recording could not be loaded')))
+    const onAbort = () => settle(() => reject(abortError()))
     audio.addEventListener('error', onError)
+    signal?.addEventListener('abort', onAbort, { once: true })
     audio.src = url
     Promise.resolve(audio.play()).then(
       () => settle(resolve),
@@ -54,6 +81,17 @@ function silentWavUrl(): string {
 }
 
 const unlocked = new WeakSet<object>()
+/** Each element's silent unlock clip source, as the element reports it. */
+const unlockSrc = new WeakMap<object, string>()
+
+/**
+ * Whether `audio` is still on its silent unlock clip, whose 'ended' event
+ * says nothing about the recording that is about to play.
+ */
+export function isUnlockClip(audio: Pick<HTMLAudioElement, 'src'>): boolean {
+  const src = unlockSrc.get(audio)
+  return src !== undefined && audio.src === src
+}
 
 /**
  * Safari only lets an element play from inside the click that asked for it,
@@ -66,6 +104,7 @@ function unlockForGesture(audio: Playable): void {
   unlocked.add(audio)
   const url = silentWavUrl()
   audio.src = url
+  unlockSrc.set(audio, audio.src)
   Promise.resolve(audio.play())
     .catch(() => {})
     .finally(() => URL.revokeObjectURL(url))
@@ -73,17 +112,23 @@ function unlockForGesture(audio: Playable): void {
 
 /**
  * Plays one recording through `audio`. A media error (an expired or refused
- * URL) gets exactly one fresh URL and another try; autoplay refusals do not.
- * Call it directly from the click handler so the Safari unlock runs within
- * the user gesture.
+ * URL) gets exactly one fresh URL and another try; autoplay refusals and
+ * aborts do not. Once `signal` aborts, it rejects with an AbortError and
+ * leaves the element alone. Call it directly from the click handler so the
+ * Safari unlock runs within the user gesture.
  */
-export async function playTrack(audio: Playable, fetchUrl: () => Promise<string>): Promise<void> {
+export async function playTrack(
+  audio: Playable,
+  fetchUrl: () => Promise<string>,
+  signal?: AbortSignal,
+): Promise<void> {
   unlockForGesture(audio)
   try {
-    await attempt(audio, await fetchUrl())
+    await attempt(audio, await unlessAborted(fetchUrl(), signal), signal)
   } catch (err) {
-    if ((err as { name?: unknown } | null)?.name === 'NotAllowedError') throw err
-    await attempt(audio, await fetchUrl())
+    const name = (err as { name?: unknown } | null)?.name
+    if (name === 'NotAllowedError' || name === 'AbortError' || signal?.aborted) throw err
+    await attempt(audio, await unlessAborted(fetchUrl(), signal), signal)
   }
 }
 
@@ -115,33 +160,46 @@ async function loadOne(
   signal: AbortSignal,
 ): Promise<AudioBuffer> {
   const once = async () => {
-    const response = await fetch(await fetchUrl(track.id), { signal })
+    const url = await unlessAborted(fetchUrl(track.id), signal)
+    const response = await fetch(url, { signal })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    return ctx.decodeAudioData(await response.arrayBuffer())
+    const data = await unlessAborted(response.arrayBuffer(), signal)
+    return ctx.decodeAudioData(data)
   }
   try {
     try {
       return await once()
-    } catch {
-      if (signal.aborted) throw new Error('aborted')
+    } catch (err) {
+      if (signal.aborted) throw err
       return await once()
     }
-  } catch {
-    throw new TrackLoadError(track)
+  } catch (err) {
+    throw signal.aborted && isAbort(err) ? err : new TrackLoadError(track)
   }
 }
 
 /**
  * Fetches and decodes every track. If one fails (after one URL refresh), the
- * rest are abandoned and this rejects with a TrackLoadError naming it.
+ * rest are abandoned and this rejects with a TrackLoadError naming it. If
+ * `signal` aborts, fetching and decoding stop and this rejects with an AbortError.
  */
-export async function loadGroup(ctx: AudioContext, tracks: GroupTrack[], deps: LoadDeps): Promise<AudioBuffer[]> {
+export async function loadGroup(
+  ctx: AudioContext,
+  tracks: GroupTrack[],
+  deps: LoadDeps,
+  signal?: AbortSignal,
+): Promise<AudioBuffer[]> {
   const controller = new AbortController()
+  const onAbort = () => controller.abort()
+  if (signal?.aborted) controller.abort()
+  signal?.addEventListener('abort', onAbort, { once: true })
   try {
     return await Promise.all(tracks.map((track) => loadOne(ctx, track, deps, controller.signal)))
   } catch (err) {
     controller.abort()
-    throw err
+    throw signal?.aborted ? abortError() : err
+  } finally {
+    signal?.removeEventListener('abort', onAbort)
   }
 }
 
