@@ -4,6 +4,7 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { S3Client } from '@aws-sdk/client-s3'
 import express, { Router, type Express } from 'express'
 import type { Store } from 'express-session'
 import helmet from 'helmet'
@@ -13,6 +14,8 @@ import { createSessionStore, sessionMiddleware } from './auth/session.js'
 import type { Config } from './config.js'
 import { dbState } from './db.js'
 import { apiNotFound, errorHandler, respond } from './http.js'
+import { recordingsRouter } from './recordings/routes.js'
+import { createS3Client, s3Storage } from './storage/s3.js'
 
 /** client/dist, resolved from this file: works from server/src (tsx) and server/dist (compiled). */
 export const DEFAULT_CLIENT_DIST = fileURLToPath(new URL('../../client/dist', import.meta.url))
@@ -26,6 +29,8 @@ export interface AppDeps {
   sessionStore?: Store
   /** bcrypt cost factor. Defaults to 12; tests pass a low value for speed. */
   bcryptRounds?: number
+  /** S3 client. Defaults to one built from config.aws; tests pass one with fake credentials. */
+  s3?: S3Client
 }
 
 function healthRouter(): Router {
@@ -58,9 +63,15 @@ export function createApp(config: Config, deps: AppDeps = {}): Express {
   app.use(express.json())
   app.use('/api', sessionMiddleware(config, deps.sessionStore ?? createSessionStore()))
 
-  // API: built-in routers, then feature routers (recordings mounts in U4).
+  // Without a bucket (local dev without AWS) the app still boots and the
+  // recording routes answer 503.
+  const bucket = config.aws.bucket
+  const storage = bucket ? s3Storage(deps.s3 ?? createS3Client(config), bucket) : null
+
+  // API: built-in routers, then extra routers.
   app.use('/api', healthRouter())
   app.use('/api', authRouter(config, { bcryptRounds: deps.bcryptRounds }))
+  app.use('/api', recordingsRouter(storage))
   for (const router of deps.apiRouters ?? []) app.use('/api', router)
   app.use('/api', apiNotFound)
 

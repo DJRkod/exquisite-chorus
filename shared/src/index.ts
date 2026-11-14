@@ -9,3 +9,11 @@ export interface ApiEnvelope<T> {
 }
 
 export type { PublicUser, SignInRequest, SignUpRequest } from './auth.js'
+export type {
+  ConfirmUploadRequest,
+  CreateUploadRequest,
+  CreateUploadResponse,
+  PlaybackUrlResponse,
+  RecordingDto,
+  RecordingStatus,
+} from './recordings.js'

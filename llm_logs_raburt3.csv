@@ -8994,3 +8994,950 @@ function parseSignIn(body: unknown): SignInRequest {
 /** Starts a fresh session (new ID, defeating fixation) for the given user. */
 async function signIn(req: Request, userId: string): Promi
 [... truncated, 5592 characters total]"
+"8e6e52d7-cba8-4109-8b1a-bd0b544f50de:0","2026-11-14T07:29:19.048Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","The checks pass on my run: 46 server tests and 1 client test. Committing U3:"
+"315d1f4e-9891-4f37-a0b8-32a1a2351ce0:0","2026-11-14T07:29:21.818Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\""; git add package-lock.json server shared && git commit -q -m \""feat(server): team-built auth with MongoDB sessions\n\nSign up, sign in, sign out and current-user endpoints. bcryptjs hashes,\nexpress-session with connect-mongo, session regeneration on sign-in,\nper-IP+email login and per-IP signup rate limits, an Origin check and\nJSON-only bodies on state-changing API requests, and a requireAuth\nguard for data routes.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/[redacted]\"" 2>&1 | grep -v warning; git log --oneline | head -1"", ""description"": ""Commit U3""}"
+"c29be81e-bdbb-4bea-a567-91ce13c080a3:0","2026-11-14T07:29:22.803Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result","warning: in the working copy of 'server/src/app.ts', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'server/test/setup.ts', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'server/src/auth/routes.ts', CRLF will be replaced by LF the next time Git touches it
+llm_logs_raburt3.csv: 609 rows from C:\Users\User\.claude\projects\C--Users-User-Dropbox-UIUC-2026-Fall-CS-409-Art-of-Web-Programming-Project
+7a9bff5 feat(server): team-built auth with MongoDB sessions"
+"77aadefd-492a-4eae-9ae5-1b8b701620e5:0","2026-11-14T07:29:26.798Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","U3 is committed. U4 is next: the recordings API with S3. It includes the review's fix for the order of the confirm steps, so a failure partway through can't strand an upload."
+"7098b17a-011d-4f93-b9ac-ba597ec6b53f:0","2026-11-14T07:29:47.491Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Agent {""description"": ""Implement U4 recordings API + S3"", ""subagent_type"": ""general-purpose"", ""prompt"": ""You are implementing one unit of an implementation plan. Repo: C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project (git branch feat/stack-skeleton; Windows; Node 24.20, npm 11). U1–U3 are committed: server/src/app.ts (createApp(config, deps) with AppDeps), config.ts (loadConfig: aws.region/bucket/keys, s3Origin), http.ts (HttpError, respond, errorHandler), db.ts, auth/ (user.model, session, guards with requireAuth + originCheck + requireJsonBody, routes), server/test/setup.ts (mongodb-memory-server; clears all collections), auth.test.ts (see how it builds apps and signs users in). Read those first and follow their style.\n\n**Do not commit, do not `git add`.** Orchestrator owns staging/commits. Do not edit the plan, `llm_logs_raburt3.csv`, `scripts/`, `.githooks/`, `.claude/`, `CLAUDE.md`, `docs/`. Read `CLAUDE.md`.\n\n## Plan context (read these sections only)\nPlan: docs/plans/2026-11-12-001-feat-tech-stack-plan.md — read `## Goal Capsule`, Product Contract `### Requirements` (R3, R4, R7), `### Key Technical Decisions` (KTD7–KTD9, KTD12–KTD14), `### High-Level Technical Design` (upload sequence + recording lifecycle), `### Assumptions`, `### U4. Recordings API and S3 integration`, `## Verification Contract`, `## Definition of Done`. Do not implement other units (no client, no deploy).\n\n## Your unit: U4 — Recordings API and S3 integration\nFollow U4's Goal, Files, Approach, Execution note (test-first; S3 mocked with `aws-sdk-client-mock`; presign helpers run with fake credentials so URL/fields can be asserted), and every Test scenario.\n\nOrchestrator corrections from document review (apply; they refine U4):\n- **Confirm ordering (idempotent, no stranding):** HeadObject(pendingKey) → validate size (1 B–20 MB) and `audio/` content type → CopyObject pending→`audio/{userId}/{uuid}` → conditional DB update `findOneAndUpdate({ _id, owner, status: 'pending' }, { status: 'ready', key, size, contentType, durationMs })` → DeleteObject(pendingKey) (a delete failure is logged, not surfaced; the lifecycle rule cleans up). If HeadObject or CopyObject reports the pending object missing (NotFound/NoSuchKey; 404), **re-read the Recording**: return it (200) if already `ready`, else 409. If the conditional update matches nothing (a concurrent confirm won), re-read and return the ready doc. If validation fails: mark `rejected`, DeleteObject the pending object, return 422. A `ready` recording confirmed again → 200 with no S3 calls. The concurrent-confirm test must end with one ready doc and both responses 200 (or one 200 + one 200 re-read) — no 500, no duplicate-key error.\n- S3 client: `@aws-sdk/client-s3`, `@aws-sdk/s3-presigned-post`, `@aws-sdk/s3-request-presigner` — same version for all `@aws-sdk/*` (verify with `npm view`). Construct one `S3Client` per app (inject via `AppDeps.s3` so tests pass a client with fake credentials `{accessKeyId:'test', secretAccessKey:'test'}` and region; `aws-sdk-client-mock` mocks commands on it). Set `requestChecksumCalculation: 'WHEN_REQUIRED'` on the client. Storage helpers in `server/src/storage/s3.ts`: `presignUpload({ key, contentType })` → `{ url, fields }` via `createPresignedPost` with Conditions `['content-length-range', 1, 20971520]`, `['eq', '$Content-Type', contentType]` (exact type), `{ key }`, Expires 300, Fields `{ 'Content-Type': contentType }`; `headObject(key)`; `promote(fromKey, toKey)` (CopyObject with CopySource URL-encoded `${bucket}/${fromKey}`); `deleteObject(key)`; `presignPlayback(key)` → `{ url, expiresAt }` via `getSignedUrl(GetObjectCommand, 3600)`.\n- Content types: accept client-declared `contentType` only if it starts with `audio/` (strip codec params for storage-key purposes is unnecessary — keep the exact type string the browser will send; but cap length ~100 chars). `size` is a positive integer ≤ 20971520. `durationMs` on confirm is optional, positive integer ≤ 30 min, else 400.\n- Recording model (`server/src/recordings/recording.model.ts`): owner (ObjectId ref User, indexed), status enum pending|ready|rejected, pendingKey (required), key (unique sparse), contentType, size, durationMs, project (optional ObjectId, unused), timestamps. `toJSON`: id, ownerId, status, contentType, size, durationMs, createdAt; no keys exposed to clients.\n- Routes (`server/src/recordings/routes.ts`, all behind `requireAuth`, mounted in createApp):\n  - `POST /api/recordings` → 201 `{ recordingId, url, fields }`.\n  - `POST /api/recordings/:id/confirm` → 200 recording; owner-only (non-owner → 404); invalid ObjectId → 400.\n  - `GET /api/recordings` → ready recordings newest first, each with `ownerDisplayName`; cap at 100 for now.\n  - `GET /api/recordings/:id/playback-url` → `{ url, expiresAt }` for ready only (pending → 404).\n- Shared types `shared/src/recordings.ts` (types only, re-exported): `RecordingDto`, `CreateUploadRequest`, `CreateUploadResponse`, `ConfirmUploadRequest`, `PlaybackUrlResponse`.\n- If `config.aws.bucket` is unset (dev without AWS), recording routes return 503 envelope \""Audio storage is not configured\"" rather than crashing; the app still boots.\n- Do not add per-user rate limits (deferred).\n\n## Evidence\nWrite `server/test/recordings.test.ts` covering all U4 scenarios + the ordering/concurrency corrections; observe them fail before implementing; report the red observation.\n\n## Verification (run and report)\nRoot: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` all pass. (Real-bucket verification happens in U7; do not attempt network calls to AWS.)\n\n## Final message must report\n(a) every file created/modified; (b) evidence: behavior_changed, tests added (names), red failure observed, each command + result, deviations and why. Concise.""}"
+"304470cd-4f91-4a1e-b12f-340cfc8be166:0","2026-11-14T07:29:47.495Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_prompt","You are implementing one unit of an implementation plan. Repo: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project (git branch feat/stack-skeleton; Windows; Node 24.20, npm 11). U1–U3 are committed: server/src/app.ts (createApp(config, deps) with AppDeps), config.ts (loadConfig: aws.region/bucket/keys, s3Origin), http.ts (HttpError, respond, errorHandler), db.ts, auth/ (user.model, session, guards with requireAuth + originCheck + requireJsonBody, routes), server/test/setup.ts (mongodb-memory-server; clears all collections), auth.test.ts (see how it builds apps and signs users in). Read those first and follow their style.
+
+**Do not commit, do not `git add`.** Orchestrator owns staging/commits. Do not edit the plan, `llm_logs_raburt3.csv`, `scripts/`, `.githooks/`, `.claude/`, `CLAUDE.md`, `docs/`. Read `CLAUDE.md`.
+
+## Plan context (read these sections only)
+Plan: docs/plans/2026-11-12-001-feat-tech-stack-plan.md — read `## Goal Capsule`, Product Contract `### Requirements` (R3, R4, R7), `### Key Technical Decisions` (KTD7–KTD9, KTD12–KTD14), `### High-Level Technical Design` (upload sequence + recording lifecycle), `### Assumptions`, `### U4. Recordings API and S3 integration`, `## Verification Contract`, `## Definition of Done`. Do not implement other units (no client, no deploy).
+
+## Your unit: U4 — Recordings API and S3 integration
+Follow U4's Goal, Files, Approach, Execution note (test-first; S3 mocked with `aws-sdk-client-mock`; presign helpers run with fake credentials so URL/fields can be asserted), and every Test scenario.
+
+Orchestrator corrections from document review (apply; they refine U4):
+- **Confirm ordering (idempotent, no stranding):** HeadObject(pendingKey) → validate size (1 B–20 MB) and `audio/` content type → CopyObject pending→`audio/{userId}/{uuid}` → conditional DB update `findOneAndUpdate({ _id, owner, status: 'pending' }, { status: 'ready', key, size, contentType, durationMs })` → DeleteObject(pendingKey) (a delete failure is logged, not surfaced; the lifecycle rule cleans up). If HeadObject or CopyObject reports the pending object missing (NotFound/NoSuchKey; 404), **re-read the Recording**: return it (200) if already `ready`, else 409. If the conditional update matches nothing (a concurrent confirm won), re-read and return the ready doc. If validation fails: mark `rejected`, DeleteObject the pending object, return 422. A `ready` recording confirmed again → 200 with no S3 calls. The concurrent-confirm test must end with one ready doc and both responses 200 (or one 200 + one 200 re-read) — no 500, no duplicate-key error.
+- S3 client: `@aws-sdk/client-s3`, `@aws-sdk/s3-presigned-post`, `@aws-sdk/s3-request-presigner` — same version for all `@aws-sdk/*` (verify with `npm view`). Construct one `S3Client` per app (inject via `AppDeps.s3` so tests pass a client with fake credentials `{accessKeyId:'test', secretAccessKey:'test'}` and region; `aws-sdk-client-mock` mocks commands on it). Set `requestChecksumCalculation: 'WHEN_REQUIRED'` on the client. Storage helpers in `server/src/storage/s3.ts`: `presignUpload({ key, contentType })` → `{ url, fields }` via `createPresignedPost` with Conditions `['content-length-range', 1, 20971520]`, `['eq', '$Content-Type', contentType]` (exact type), `{ key }`, Expires 300, Fields `{ 'Content-Type': contentType }`; `headObject(key)`; `promote(fromKey, toKey)` (CopyObject with CopySource URL-encoded `${bucket}/${fromKey}`); `deleteObject(key)`; `presignPlayback(key)` → `{ url, expiresAt }` via `getSignedUrl(GetObjectCommand, 3600)`.
+- Content types: accept client-declared `contentType` only if it starts with `audio/` (strip codec params for storage-key purposes is unnecessary — keep the exact type string the browser will send; but cap length ~100 chars). `size` is a positive integer ≤ 20971520. `durationMs` on confirm is optional, positive integer ≤ 30 min, else 400.
+- Recording model (`server/src/recordings/recording.model.ts`): owner (ObjectId ref User, indexed), status enum pending|ready|rejected, pendingKey (required), key (unique sparse), contentType, size, durationMs, project (optional ObjectId, unused), timestamps. `toJSON`: id, ownerId, status, contentType, size, durationMs, createdAt; no keys exposed to clients.
+- Routes (`server/src/recordings/routes.ts`, all behind `requireAuth`, mounted in createApp):
+  - `POST /api/recordings` → 201 `{ recordingId, url, fields }`.
+  - `POST /api/recordings/:id/confirm` → 200 recording; owner-only (non-owner → 404); invalid ObjectId → 400.
+  - `GET /api/recordings` → ready recordings newest first, each with `ownerDisplayName`; cap at 100 for now.
+  - `GET /api/recordings/:id/playback-url` → `{ url, expiresAt }` for ready only (pending → 404).
+- Shared types `shared/src/recordings.ts` (types only, re-exported): `RecordingDto`, `CreateUploadRequest`, `CreateUploadResponse`, `ConfirmUploadRequest`, `PlaybackUrlResponse`.
+- If `config.aws.bucket` is unset (dev without AWS), recording routes return 503 envelope ""Audio storage is not configured"" rather than crashing; the app still boots.
+- Do not add per-user rate limits (deferred).
+
+## Evidence
+Write `server/test/recordings.test.ts` covering all U4 scenarios + the ordering/concurrency corrections; observe them fail before implementing; report the red observation.
+
+## Verification (run and report)
+Root: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` all pass. (Real-bucket verification happens in U7; do not attempt network calls to AWS.)
+
+## Final message must report
+(a) every file created/modified; (b) evidence: behavior_changed, tests added (names), red failure observed, each command + result, deviations and why. Concise."
+"16316c22-fc26-4bf0-9cf4-30fa3cc09ec9:0","2026-11-14T07:29:47.502Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result","Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)
+agentId: aeeb07a5f2a5ede6a (internal ID - do not mention to user. Use SendMessage with to: 'aeeb07a5f2a5ede6a', summary: '<5-10 word recap>' to continue this agent.)
+The agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.
+Do not duplicate this agent's work — avoid working with the same files or topics it is using.
+output_file: C:\Users\User\AppData\Local\Temp\claude\8eeb967062a64003\e98c1602-5de1-48cb-b5cf-ad09189e70d7\tasks\aeeb07a5f2a5ede6a.output
+Do NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification."
+"cbe784c4-78e7-4ab5-a956-c364c8114cbd:0","2026-11-14T07:29:48.826Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","response","U4 is running in the background. U1 through U3 are committed on `feat/stack-skeleton`: the scaffold, the Express foundation, and login."
+"8212d4ee-b512-4344-9084-c2e4bf98548b:0","2026-11-14T07:29:49.473Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && cat CLAUDE.md && git status --short && ls server/src server/src/auth server/test shared/src && cat server/package.json package.json shared/package.json"", ""description"": ""Read CLAUDE.md, status, layout, package files""}"
+"a86df970-0a3d-4321-8e0f-1cea2e257232:0","2026-11-14T07:29:49.702Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","# Working in this repo
+
+Five people share this repo, and not all of them use LLM agents. An agent can move faster than teammates can follow, so protect their work above all.
+
+## Before starting work
+
+- `git fetch` first, and check open PRs, issues and remote branches (`gh pr list`, `gh issue list`, `git branch -r`) for work that overlaps the task. If someone already owns it, stop and ask rather than build a duplicate.
+
+## Changing code
+
+- Work on a feature branch and open a PR. Don't push directly to `main`.
+- Never force-push, rebase, or reset a branch someone else has pushed to.
+- Don't delete or rewrite files, branches, or code that another person wrote unless explicitly asked. Check `git log` / `git blame` when unsure who owns something.
+- Keep changes scoped to the task. Don't reformat or ""clean up"" other people's code in passing.
+
+## Merging
+
+- Merge PRs only when asked. Never merge a teammate's PR on your own.
+- In a merge conflict, keep both sides' intent. If it's unclear which change should win, stop and ask.
+
+## LLM chat log
+
+`llm_logs_raburt3.csv` belongs to raburt3 and is regenerated by `scripts/export_llm_logs.py`. Don't edit it by hand, and don't add logging for other teammates.
+ M llm_logs_raburt3.csv
+server/src:
+app.ts
+auth/
+config.ts
+db.ts
+http.ts
+index.ts
+
+server/src/auth:
+guards.ts
+routes.ts
+session.ts
+user.model.ts
+
+server/test:
+app.test.ts
+auth.test.ts
+setup.ts
+
+shared/src:
+auth.ts
+index.ts
+{
+  ""name"": ""@exquisite-chorus/server"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""scripts"": {
+    ""dev"": ""tsx watch src/index.ts"",
+    ""build"": ""tsc -p tsconfig.build.json"",
+    ""start"": ""node dist/index.js"",
+    ""typecheck"": ""tsc --noEmit -p ."",
+    ""test"": ""vitest run"",
+    ""test:watch"": ""vitest""
+  },
+  ""dependencies"": {
+    ""bcryptjs"": ""^3.0.3"",
+    ""connect-mongo"": ""^6.0.0"",
+    ""dotenv"": ""^18.0.10"",
+    ""express"": ""^5.3.0"",
+    ""express-rate-limit"": ""^8.7.4"",
+    ""express-session"": ""^1.19.0"",
+    ""helmet"": ""^8.3.0"",
+    ""mongoose"": ""^9.12.1""
+  },
+  ""devDependencies"": {
+    ""@exquisite-chorus/shared"": ""*"",
+    ""@types/express"": ""^5.0.6"",
+    ""@types/express-session"": ""^1.19.0"",
+    ""@types/node"": ""^24.19.2"",
+    ""@types/supertest"": ""^7.2.1"",
+    ""mongodb-memory-server"": ""^11.3.0"",
+    ""supertest"": ""^7.3.2"",
+    ""tsx"": ""^4.23.15"",
+    ""vitest"": ""^5.1.0""
+  }
+}
+{
+  ""name"": ""exquisite-chorus"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""workspaces"": [
+    ""shared"",
+    ""server"",
+    ""client""
+  ],
+  ""engines"": {
+    ""node"": "">=24 <25""
+  },
+  ""scripts"": {
+    ""dev"": ""concurrently -k -n server,client -c blue,magenta \""npm run dev -w server\"" \""npm run dev -w client\"""",
+    ""lint"": ""oxlint"",
+    ""typecheck"": ""npm run typecheck --workspaces"",
+    ""test"": ""npm run test -w server -w client"",
+    ""build"": ""npm run build -w client -w server"",
+    ""start"": ""npm run start -w server""
+  },
+  ""devDependencies"": {
+    ""concurrently"": ""^10.0.7"",
+    ""oxlint"": ""^1.93.0"",
+    ""typescript"": ""~6.0.3""
+  }
+}
+{
+  ""name"": ""@exquisite-chorus/shared"",
+  ""private"": true,
+  ""version"": ""0.0.0"",
+  ""type"": ""module"",
+  ""description"": ""API payload types shared by client and server. Types only: consumers use `import type`."",
+  ""exports"": {
+    ""."": {
+      ""types"": ""./src/index.ts""
+    }
+  },
+  ""scripts"": {
+    ""typecheck"": ""tsc --noEmit -p .""
+  }
+}"
+"6e313e8c-08b8-4398-8ecf-82b29e19066e:0","2026-11-14T07:29:51.883Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server\"" && for f in src/app.ts src/config.ts src/http.ts src/db.ts src/index.ts src/auth/*.ts test/*.ts ../shared/src/*.ts vitest.config.* tsconfig*.json ../shared/tsconfig.json; do echo \""=== $f\""; cat \""$f\""; done 2>&1"", ""description"": ""Read server source, tests, shared types""}"
+"dd611fb8-a216-43a3-a777-643ddc83ce6a:0","2026-11-14T07:29:52.498Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","<persisted-output>
+Output too large (41.1KB). Full output saved to: C:\Users\User\.claude\projects\C--Users-User-Dropbox-UIUC-2026-Fall-CS-409-Art-of-Web-Programming-Project\e98c1602-5de1-48cb-b5cf-ad09189e70d7\tool-results\bdplt3b3h.txt
+
+Preview (first 2KB):
+=== src/app.ts
+// Builds the Express app without listening, so tests can drive it with
+// supertest. Everything stateful (routers, rate limiters, the session store) is
+// created per call; nothing leaks between app instances.
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import express, { Router, type Express } from 'express'
+import type { Store } from 'express-session'
+import helmet from 'helmet'
+import { originCheck, requireJsonBody } from './auth/guards.js'
+import { authRouter } from './auth/routes.js'
+import { createSessionStore, sessionMiddleware } from './auth/session.js'
+import type { Config } from './config.js'
+import { dbState } from './db.js'
+import { apiNotFound, errorHandler, respond } from './http.js'
+
+/** client/dist, resolved from this file: works from server/src (tsx) and server/dist (compiled). */
+export const DEFAULT_CLIENT_DIST = fileURLToPath(new URL('../../client/dist', import.meta.url))
+
+export interface AppDeps {
+  /** Built SPA directory. `null` disables static hosting; a missing directory is skipped. */
+  clientDist?: string | null
+  /** Extra routers mounted under /api, after the built-in ones and before the /api 404. */
+  apiRouters?: Router[]
+  /** Session store. Defaults to connect-mongo on Mongoose's connection. */
+  sessionStore?: Store
+  /** bcrypt cost factor. Defaults to 12; tests pass a low value for speed. */
+  bcryptRounds?: number
+}
+
+function healthRouter(): Router {
+  const router = Router()
+  router.get('/health', (_req, res) => {
+    respond(res, 200, 'OK', { db: dbState() })
+  })
+  return router
+}
+
+export function createApp(config: Config, deps: AppDeps = {}): Express {
+  const app = express()
+
+  app.set('trust proxy', config.trustProxy)
+
+  const s3 = config.s3Origin ? [config.s3Origin] : []
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          mediaSrc: [""'self'"", 'blob:', ...s3],
+...
+</persisted-output>"
+"4a734300-ee73-46f0-88bd-7add1f8b6ea6:0","2026-11-14T07:29:54.181Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Read {""file_path"": ""C:\\Users\\User\\.claude\\projects\\C--Users-User-Dropbox-UIUC-2026-Fall-CS-409-Art-of-Web-Programming-Project\\e98c1602-5de1-48cb-b5cf-ad09189e70d7\\tool-results\\bdplt3b3h.txt"", ""allow_large"": true}"
+"b1533879-f7d8-4062-8e66-716deef5c893:0","2026-11-14T07:29:54.203Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","1	=== src/app.ts
+2	// Builds the Express app without listening, so tests can drive it with
+3	// supertest. Everything stateful (routers, rate limiters, the session store) is
+4	// created per call; nothing leaks between app instances.
+5	import { existsSync } from 'node:fs'
+6	import path from 'node:path'
+7	import { fileURLToPath } from 'node:url'
+8	import express, { Router, type Express } from 'express'
+9	import type { Store } from 'express-session'
+10	import helmet from 'helmet'
+11	import { originCheck, requireJsonBody } from './auth/guards.js'
+12	import { authRouter } from './auth/routes.js'
+13	import { createSessionStore, sessionMiddleware } from './auth/session.js'
+14	import type { Config } from './config.js'
+15	import { dbState } from './db.js'
+16	import { apiNotFound, errorHandler, respond } from './http.js'
+17	
+18	/** client/dist, resolved from this file: works from server/src (tsx) and server/dist (compiled). */
+19	export const DEFAULT_CLIENT_DIST = fileURLToPath(new URL('../../client/dist', import.meta.url))
+20	
+21	export interface AppDeps {
+22	  /** Built SPA directory. `null` disables static hosting; a missing directory is skipped. */
+23	  clientDist?: string | null
+24	  /** Extra routers mounted under /api, after the built-in ones and before the /api 404. */
+25	  apiRouters?: Router[]
+26	  /** Session store. Defaults to connect-mongo on Mongoose's connection. */
+27	  sessionStore?: Store
+28	  /** bcrypt cost factor. Defaults to 12; tests pass a low value for speed. */
+29	  bcryptRounds?: number
+30	}
+31	
+32	function healthRouter(): Router {
+33	  const router = Router()
+34	  router.get('/health', (_req, res) => {
+35	    respond(res, 200, 'OK', { db: dbState() })
+36	  })
+37	  return router
+38	}
+39	
+40	export function createApp(config: Config, deps: AppDeps = {}): Express {
+41	  const app = express()
+42	
+43	  app.set('trust proxy', config.trustProxy)
+44	
+45	  const s3 = config.s3Origin ? [config.s3Origin] : []
+46	  app.use(
+47	    helmet({
+48	      contentSecurityPolicy: {
+49	        directives: {
+50	          mediaSrc: [""'self'"", 'blob:', ...s3],
+51	          connectSrc: [""'self'"", ...s3],
+52	        },
+53	      },
+54	    }),
+55	  )
+56	
+57	  // CSRF defenses (KTD4) run before any body parsing or session work.
+58	  app.use('/api', originCheck(config.appOrigins), requireJsonBody)
+59	  app.use(express.json())
+60	  app.use('/api', sessionMiddleware(config, deps.sessionStore ?? createSessionStore()))
+61	
+62	  // API: built-in routers, then feature routers (recordings mounts in U4).
+63	  app.use('/api', healthRouter())
+64	  app.use('/api', authRouter(config, { bcryptRounds: deps.bcryptRounds }))
+65	  for (const router of deps.apiRouters ?? []) app.use('/api', router)
+66	  app.use('/api', apiNotFound)
+67	
+68	  // SPA: static assets, then index.html for client-side routes. /api never
+69	  // reaches here because the /api 404 above ends every unmatched API request.
+70	  const clientDist = deps.clientDist === undefined ? DEFAULT_CLIENT_DIST : deps.clientDist
+71	  if (clientDist && existsSync(path.join(clientDist, 'index.html'))) {
+72	    app.use(express.static(clientDist))
+73	    app.get('/{*splat}', (_req, res, next) => {
+74	      res.sendFile('index.html', { root: clientDist }, (err) => {
+75	        if (err) next(err)
+76	      })
+77	    })
+78	  }
+79	
+80	  app.use(errorHandler)
+81	  return app
+82	}
+83	=== src/config.ts
+84	// Parses and validates environment variables into a typed config object.
+85	// In production, missing or weak settings stop the server at startup; in
+86	// development and test, sensible local defaults apply.
+87	
+88	export type NodeEnv = 'development' | 'test' | 'production'
+89	
+90	export interface Config {
+91	  nodeEnv: NodeEnv
+92	  port: number
+93	  mongodbUri: string
+94	  sessionSecret: string
+95	  /** Allowed browser origins, from comma-separated APP_ORIGIN. */
+96	  appOrigins: string[]
+97	  /** Number of reverse-proxy hops to trust, or false. Never `true`. */
+98	  trustProxy: number | false
+99	  aws: {
+100	    region: string
+101	    bucket: string
+102	    accessKeyId?: string
+103	    secretAccessKey?: string
+104	  }
+105	  /** `https://<bucket>.s3.<region>.amazonaws.com`, or undefined without a bucket. */
+106	  s3Origin?: string
+107	}
+108	
+109	type Env = Record<string, string | undefined>
+110	
+111	const MIN_SECRET_LENGTH = 32
+112	
+113	function value(env: Env, name: string): string | undefined {
+114	  const raw = env[name]?.trim()
+115	  return raw ? raw : undefined
+116	}
+117	
+118	function parseNodeEnv(raw: string | undefined): NodeEnv {
+119	  if (raw === undefined) return 'development'
+120	  if (raw === 'development' || raw === 'test' || raw === 'production') return raw
+121	  throw new Error(`NODE_ENV must be development, test or production (got ""${raw}"")`)
+122	}
+123	
+124	function parsePort(raw: string | undefined): number {
+125	  if (raw === undefined) return 3000
+126	  const port = Number(raw)
+127	  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+128	    throw new Error(`POR
+[... truncated, 46633 characters total]"
+"178158d1-17fd-419f-aa89-2c8eb1be0855:0","2026-11-14T07:29:54.914Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","Now the plan sections."
+"25efb801-e98e-44ba-8bdc-346aa1731344:0","2026-11-14T07:29:55.912Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && grep -n \""^##\\|^###\"" docs/plans/2026-11-12-001-feat-tech-stack-plan.md"", ""description"": ""List plan headings""}"
+"df6a39e4-0221-4bca-8f63-25071df151f4:0","2026-11-14T07:29:56.015Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","14:## Goal Capsule
+25:## Product Contract
+29:### Summary
+33:### Problem Frame
+39:### Key Decisions
+59:### Requirements
+82:### Scope Boundaries
+89:### Dependencies / Assumptions
+98:### Sources / Research
+109:## Planning Contract
+111:### Key Technical Decisions
+128:### High-Level Technical Design
+176:### Output Structure
+196:### Assumptions
+201:### Risks & Dependencies
+215:### Planning Sources
+228:## Implementation Units
+230:### U1. Monorepo scaffold and tooling
+248:### U2. Express foundation and SPA hosting
+274:### U3. Authentication
+310:### U4. Recordings API and S3 integration
+347:### U5. Client shell, API client, and auth screens
+372:### U6. Recording capture, upload, and playback UI
+407:### U7. Deployment, cloud setup runbook, and secret hygiene
+439:## Verification Contract
+454:## Definition of Done"
+"18dc7c3e-c24a-43f9-a4bc-aff18a993277:0","2026-11-14T07:29:57.720Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && f=docs/plans/2026-11-12-001-feat-tech-stack-plan.md; sed -n '14,24p;59,81p;111,175p;196,200p;310,346p;439,480p' $f"", ""description"": ""Read relevant plan sections""}"
+"1327577d-344b-4ba0-9534-5dbad4333d7e:0","2026-11-14T07:29:57.822Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","## Goal Capsule
+
+- **Objective:** Stand up the Exquisite Chorus stack as a deployed walking skeleton. It proves sign-up/sign-in, audio upload to S3, and synced playback end to end, so product features can be built on it toward the Dec 8, 2026 submission.
+- **Product authority:** App behavior comes from [docs/proposal.pdf](../proposal.pdf). The Product Contract below decides the stack, the Planning Contract decides how it is built, and unit bodies are authoritative over summaries. Product features (skills, tags, feed matching, contributions, project tracking) are later plans, not active scope.
+- **Open blockers:** None.
+- **Stop conditions:** Stop and ask if a settled decision proves unworkable, if AWS or Render setup needs a credential only raburt3 holds, or if a change would touch work a teammate has pushed (see `CLAUDE.md`).
+- **Execution profile:** TypeScript monorepo; units land in dependency order; API units are test-first against an in-memory database with S3 mocked.
+- **Tail ownership:** Work on a feature branch and open a PR to `main`; never merge without raburt3's say-so (`CLAUDE.md`).
+
+---
+
+### Requirements
+
+**Course compliance**
+
+- R1. The app has a React frontend, an Express REST API, MongoDB as its database, and user authentication, together satisfying the course's hard requirements.
+- R2. The app is publicly hosted, and the API is reachable from the hosted frontend.
+
+**Audio storage**
+
+- R3. Audio bytes are stored only in S3; MongoDB stores the object key and metadata (owner, project, duration, format), never the audio itself.
+- R4. Only signed-in users can get an upload URL, and upload and playback URLs expire after a short window.
+- R5. Recordings from current Chrome, Firefox, and Safari upload and play back in all three.
+
+**Authentication**
+
+- R6. Users sign up and sign in with credentials the team's backend verifies; passwords are stored only as salted hashes.
+- R7. Routes that create or change data reject requests without a valid session.
+
+**Operations**
+
+- R8. An AWS budget alert is set before the first upload, so a runaway bill is noticed at a few dollars.
+- R9. Secrets (AWS keys, database URI, session secret) never enter the repository.
+
+### Key Technical Decisions
+
+- KTD1. **TypeScript on client, server, and a shared types package** (session-settled: user-directed — chosen over plain JavaScript and a TS-frontend/JS-backend split: shared API payload types catch frontend/backend drift across five contributors.) npm workspaces: `client/`, `server/`, `shared/`.
+- KTD2. **One Render web service: Express serves the built SPA and the API from the same origin.** `onrender.com` is on the Public Suffix List, so a separate static site would make the session cookie cross-site, which Safari and Firefox block. Same origin also removes API CORS. Cost: the frontend shares the API's cold start, handled by a wake-up banner (U5). Instantiates Product Contract R2.
+- KTD3. **Server-side sessions via `express-session` + `connect-mongo`, not JWTs.** Logout revokes immediately, and the session ID is regenerated on sign-in. Cookie: `httpOnly`, `secure` in production, `sameSite: 'lax'`, with `trust proxy` set because Render terminates TLS. Instantiates the team-built-auth Key Decision.
+- KTD4. **CSRF defense = SameSite=Lax + same origin + `Origin` header check on state-changing routes + JSON-only bodies.** `csurf` is deprecated and unnecessary under KTD2.
+- KTD5. **`bcryptjs` (cost 12) for password hashing.** Pure JS avoids native builds on teammates' Windows machines; the latency is acceptable at demo scale.
+- KTD6. **Login rate limit with `express-rate-limit`**, about 10 attempts per 15 minutes keyed on IP + email. It relies on `trust proxy`. Unknown-user and wrong-password return the same error.
+- KTD7. **Uploads use presigned POST, not PUT.** Only a POST policy can enforce `content-length-range` (1 B–20 MB) and an `audio/` content type at S3. It also sidesteps the SDK's checksum parameters that break browser PUTs. The policy expires in 5 minutes.
+- KTD8. **Uploads land under `pending/{userId}/{uuid}`, and confirm promotes them to `audio/{userId}/{uuid}`.** The server mints every key. Confirm runs `HeadObject`, re-checks size and type, copies to `audio/`, deletes the pending object, and marks the Recording `ready`. An S3 lifecycle rule expires `pending/` after 1 day, so abandoned uploads clean themselves up. Confirm is idempotent.
+- KTD9. **The bucket stays private, and playback uses presigned GET URLs valid for 1 hour.** Block Public Access stays on, and the client requests a URL at play time and retries once on a 403. Instantiates R4.
+- KTD10. **Synced playback uses the Web Audio API.** Each track is fetched, decoded with `decodeAudioData`, and every source is started at the same `AudioContext.currentTime + 0.1`. The context is resumed on a user gesture. Separate `<audio>` elements drift. Single-track playback may use `<audio>`.
+- KTD11. **Formats are stored as recorded, with no server transcoding.** The 
+[... truncated, 12497 characters total]"
+"b37d0194-8f1e-484a-b47f-84cbb2fe93c8:0","2026-11-14T07:30:00.087Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && for p in @aws-sdk/client-s3 @aws-sdk/s3-presigned-post @aws-sdk/s3-request-presigner aws-sdk-client-mock; do echo \""$p $(npm view $p version)\""; done; npm view aws-sdk-client-mock peerDependencies; cat .oxlintrc.json 2>/dev/null | head -40"", ""description"": ""Check AWS SDK package versions""}"
+"ec112d17-22d6-4c47-be0b-5abdf5345ce1:0","2026-11-14T07:30:05.313Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","@aws-sdk/client-s3 3.1169.0
+@aws-sdk/s3-presigned-post 3.1169.0
+@aws-sdk/s3-request-presigner 3.1169.0
+aws-sdk-client-mock 4.1.0
+{
+  ""$schema"": ""./node_modules/oxlint/configuration_schema.json"",
+  ""plugins"": [
+    ""react"",
+    ""typescript"",
+    ""oxc""
+  ],
+  ""ignorePatterns"": [
+    ""**/dist/**"",
+    ""**/node_modules/**"",
+    ""**/coverage/**""
+  ],
+  ""rules"": {
+    ""react/rules-of-hooks"": ""error"",
+    ""react/only-export-components"": [
+      ""warn"",
+      {
+        ""allowConstantExport"": true
+      }
+    ]
+  },
+  ""overrides"": [
+    {
+      ""files"": [
+        ""client/src/test/**"",
+        ""**/*.test.tsx""
+      ],
+      ""rules"": {
+        ""react/only-export-components"": ""off""
+      }
+    }
+  ]
+}"
+"01af76f1-8fa6-460b-8909-81709aad111e:0","2026-11-14T07:30:09.265Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && npm install -w server --save-exact @aws-sdk/[redacted-email] @aws-sdk/[redacted-email] @aws-sdk/[redacted-email] 2>&1 | tail -5 && npm install -w server -D aws-sdk-client-mock@^4.1.0 2>&1 | tail -5 && npm ls @aws-sdk/client-s3 -w server"", ""description"": ""Install AWS SDK packages and mock library"", ""timeout"": 300000}"
+"91dec374-f733-43a9-8619-b30c52c8fadc:0","2026-11-14T07:30:16.646Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","npm warn install-scripts 2 packages have install scripts not yet covered by allowScripts:
+npm warn install-scripts   [redacted-email] (postinstall: node install.js)
+npm warn install-scripts   [redacted-email] (postinstall: node ./postinstall.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm warn install-scripts 2 packages have install scripts not yet covered by allowScripts:
+npm warn install-scripts   [redacted-email] (postinstall: node install.js)
+npm warn install-scripts   [redacted-email] (postinstall: node ./postinstall.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+[redacted-email] C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project
+`-- @exquisite-chorus/[redacted-email] -> .\server
+  +-- @aws-sdk/[redacted-email]
+  `-- @aws-sdk/[redacted-email]
+    `-- @aws-sdk/[redacted-email] deduped"
+"e6cb7c18-eb7d-4572-b6bb-379027ecf46d:0","2026-11-14T07:30:25.556Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && cat node_modules/@aws-sdk/s3-presigned-post/dist-es/createPresignedPost.js | head -80; ls node_modules/aws-sdk-client-mock/dist/types; grep -n \""requestChecksumCalculation\"" -r node_modules/@aws-sdk/client-s3/dist-types/S3Client.d.ts | head -3"", ""description"": ""Inspect presigned-post source and mock types""}"
+"24c39ee0-4c8e-46bf-b6ce-fa7176ff55d2:0","2026-11-14T07:30:25.770Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","import { PutObjectCommand } from ""@aws-sdk/client-s3"";
+import { formatUrl } from ""@aws-sdk/core/util"";
+import { getEndpointFromInstructions, toEndpointV1 } from ""@smithy/core/endpoints"";
+import { toHex, toUint8Array } from ""@smithy/core/serde"";
+import { createScope, getSigningKey } from ""@smithy/signature-v4"";
+import { ALGORITHM_IDENTIFIER, ALGORITHM_QUERY_PARAM, AMZ_DATE_QUERY_PARAM, CREDENTIAL_QUERY_PARAM, SIGNATURE_QUERY_PARAM, TOKEN_QUERY_PARAM, } from ""./constants"";
+export const createPresignedPost = async (client, { Bucket, Key, Conditions = [], Fields = {}, Expires = 3600 }) => {
+    const { systemClockOffset, base64Encoder, utf8Decoder, sha256 } = client.config;
+    const now = new Date(Date.now() + systemClockOffset);
+    const signingDate = iso8601(now).replace(/[\-:]/g, """");
+    const shortDate = signingDate.slice(0, 8);
+    const clientRegion = await client.config.region();
+    const credentialScope = createScope(shortDate, clientRegion, ""s3"");
+    const clientCredentials = await client.config.credentials();
+    const credential = `${clientCredentials.accessKeyId}/${credentialScope}`;
+    const fields = {
+        ...Fields,
+        bucket: Bucket,
+        [ALGORITHM_QUERY_PARAM]: ALGORITHM_IDENTIFIER,
+        [CREDENTIAL_QUERY_PARAM]: credential,
+        [AMZ_DATE_QUERY_PARAM]: signingDate,
+        ...(clientCredentials.sessionToken ? { [TOKEN_QUERY_PARAM]: clientCredentials.sessionToken } : {}),
+    };
+    const expiration = new Date(now.valueOf() + Expires * 1000);
+    const conditionsSet = new Set();
+    for (const condition of Conditions) {
+        const stringifiedCondition = JSON.stringify(condition);
+        conditionsSet.add(stringifiedCondition);
+    }
+    for (const [k, v] of Object.entries(fields)) {
+        conditionsSet.add(JSON.stringify({ [k]: v }));
+    }
+    if (Key.endsWith(""${filename}"")) {
+        conditionsSet.add(JSON.stringify([""starts-with"", ""$key"", Key.substring(0, Key.lastIndexOf(""${filename}""))]));
+    }
+    else {
+        conditionsSet.add(JSON.stringify({ key: Key }));
+    }
+    const conditions = Array.from(conditionsSet).map((item) => JSON.parse(item));
+    const encodedPolicy = base64Encoder(utf8Decoder(JSON.stringify({
+        expiration: iso8601(expiration),
+        conditions,
+    })));
+    const signingKey = await getSigningKey(sha256, clientCredentials, shortDate, clientRegion, ""s3"");
+    const signature = await hmac(sha256, signingKey, encodedPolicy);
+    const endpoint = toEndpointV1(await getEndpointFromInstructions({ Bucket, Key }, PutObjectCommand, {
+        ...client.config,
+    }, {
+        logger: client.config.logger,
+    }));
+    return {
+        url: formatUrl(endpoint),
+        fields: {
+            ...fields,
+            key: Key,
+            Policy: encodedPolicy,
+            [SIGNATURE_QUERY_PARAM]: toHex(signature),
+        },
+    };
+};
+const iso8601 = (date) => date.toISOString().replace(/\.\d{3}Z$/, ""Z"");
+const hmac = (ctor, secret, data) => {
+    const hash = new ctor(secret);
+    hash.update(toUint8Array(data));
+    return hash.digest();
+};
+awsClientStub.d.ts
+index.d.ts
+mockClient.d.ts
+sinon.d.ts"
+"edd7dcc4-f15a-4d22-9e4b-4aace0caf391:0","2026-11-14T07:30:31.865Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && cat > shared/src/recordings.ts <<'EOF'\n// Recording request and response shapes for /api/recordings/*.\n\nexport type RecordingStatus = 'pending' | 'ready' | 'rejected'\n\n/** A recording as the API returns it. Never carries S3 object keys. */\nexport interface RecordingDto {\n  id: string\n  ownerId: string\n  /** Present in list responses. */\n  ownerDisplayName?: string\n  status: RecordingStatus\n  /** MIME type as recorded, e.g. `audio/webm;codecs=opus`. */\n  contentType: string\n  /** Bytes; known once the upload is confirmed. */\n  size: number | null\n  durationMs: number | null\n  /** ISO 8601. */\n  createdAt: string\n}\n\n/** POST /api/recordings body. */\nexport interface CreateUploadRequest {\n  contentType: string\n  size: number\n}\n\n/** POST /api/recordings response: a presigned POST valid for 5 minutes. */\nexport interface CreateUploadResponse {\n  recordingId: string\n  url: string\n  /** Form fields to send, in order, before the file field. */\n  fields: Record<string, string>\n}\n\n/** POST /api/recordings/:id/confirm body. */\nexport interface ConfirmUploadRequest {\n  durationMs?: number\n}\n\n/** GET /api/recordings/:id/playback-url response. */\nexport interface PlaybackUrlResponse {\n  url: string\n  /** ISO 8601. */\n  expiresAt: string\n}\nEOF\ncat >> shared/src/index.ts <<'EOF'\nexport type {\n  ConfirmUploadRequest,\n  CreateUploadRequest,\n  CreateUploadResponse,\n  PlaybackUrlResponse,\n  RecordingDto,\n  RecordingStatus,\n} from './recordings.js'\nEOF"", ""description"": ""Add shared recording types""}"
+"1f6e300b-3860-4ec7-a312-3e648563d34f:0","2026-11-14T07:30:32.007Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","(Bash completed with no output)"
+"2e8a39e2-66ac-447f-8fab-4f789ebe43a9:0","2026-11-14T07:31:50.662Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\test\\recordings.test.ts"", ""content"": ""import {\n  CopyObjectCommand,\n  DeleteObjectCommand,\n  HeadObjectCommand,\n  NoSuchKey,\n  NotFound,\n  S3Client,\n} from '@aws-sdk/client-s3'\nimport { mockClient } from 'aws-sdk-client-mock'\nimport mongoose from 'mongoose'\nimport request from 'supertest'\nimport { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'\nimport { createApp } from '../src/app.js'\nimport { User } from '../src/auth/user.model.js'\nimport { loadConfig } from '../src/config.js'\nimport { Recording } from '../src/recordings/recording.model.js'\n\nconst BUCKET = 'chorus-audio'\nconst REGION = 'us-east-2'\nconst MAX_BYTES = 20 * 1024 * 1024\nconst config = loadConfig({ NODE_ENV: 'test', S3_BUCKET: BUCKET, AWS_REGION: REGION })\n\n// Fake credentials: presigning is pure local crypto, and every command sent\n// through the client is intercepted by aws-sdk-client-mock. No network.\nconst s3 = new S3Client({\n  region: REGION,\n  credentials: { accessKeyId: 'test', secretAccessKey: 'test' },\n  requestChecksumCalculation: 'WHEN_REQUIRED',\n})\nconst s3Mock = mockClient(s3)\n\nfunction makeApp() {\n  return createApp(config, { clientDist: null, bcryptRounds: 4, s3 })\n}\n\nconst alice = { email: '[redacted-email]', password: 'correct horse', displayName: 'Alice' }\nconst bob = { email: '[redacted-email]', password: 'battery staple', displayName: 'Bob' }\n\nasync function signedIn(app: ReturnType<typeof makeApp>, user = alice) {\n  const agent = request.agent(app)\n  const res = await agent.post('/api/auth/signup').send(user).expect(201)\n  return { agent, userId: res.body.data.id as string }\n}\n\nfunction decodePolicy(fields: Record<string, string>) {\n  return JSON.parse(Buffer.from(fields.Policy, 'base64').toString('utf8')) as {\n    expiration: string\n    conditions: unknown[]\n  }\n}\n\nfunction mockStoredObject(size: number, contentType: string) {\n  s3Mock.on(HeadObjectCommand).resolves({ ContentLength: size, ContentType: contentType })\n  s3Mock.on(CopyObjectCommand).resolves({})\n  s3Mock.on(DeleteObjectCommand).resolves({})\n}\n\nfunction notFound() {\n  return new NotFound({ $metadata: { httpStatusCode: 404 }, message: 'NotFound' })\n}\n\n/** Creates a pending recording through the API; returns its id and pending key. */\nasync function presign(agent: request.Agent, contentType = 'audio/mp4', size = 5 * 1024 * 1024) {\n  const res = await agent.post('/api/recordings').send({ contentType, size }).expect(201)\n  const id = res.body.data.recordingId as string\n  const doc = await Recording.findById(id)\n  return { id, pendingKey: doc!.pendingKey, res }\n}\n\nbeforeAll(async () => {\n  await Promise.all([User.init(), Recording.init()])\n})\n\nbeforeEach(() => {\n  s3Mock.reset()\n})\n\nafterEach(() => {\n  vi.restoreAllMocks()\n})\n\ndescribe('POST /api/recordings (presign)', () => {\n  it('returns 201 with a presigned POST whose policy pins size, exact type and a pending key', async () => {\n    const { agent, userId } = await signedIn(makeApp())\n    const contentType = 'audio/webm;codecs=opus'\n    const res = await agent.post('/api/recordings').send({ contentType, size: 12345 })\n    expect(res.status).toBe(201)\n\n    const { recordingId, url, fields } = res.body.data\n    expect(mongoose.isValidObjectId(recordingId)).toBe(true)\n    expect(url).toBe(`https://${BUCKET}.s3.${REGION}.amazonaws.com/`)\n    expect(fields.key).toMatch(new RegExp(`^pending/${userId}/[0-9a-f-]{36}$`))\n    expect(fields['Content-Type']).toBe(contentType)\n    expect(fields['X-Amz-Signature']).toMatch(/^[0-9a-f]{64}$/)\n\n    const policy = decodePolicy(fields)\n    expect(policy.conditions).toContainEqual(['content-length-range', 1, MAX_BYTES])\n    expect(policy.conditions).toContainEqual(['eq', '$Content-Type', contentType])\n    expect(policy.conditions).toContainEqual({ key: fields.key })\n    expect(policy.conditions).toContainEqual({ bucket: BUCKET })\n    const expiresIn = Date.parse(policy.expiration) - Date.now()\n    expect(expiresIn).toBeGreaterThan(290_000)\n    expect(expiresIn).toBeLessThanOrEqual(300_000)\n\n    const doc = await Recording.findById(recordingId)\n    expect(doc?.status).toBe('pending')\n    expect(doc?.pendingKey).toBe(fields.key)\n    expect(String(doc?.owner)).toBe(userId)\n    expect(doc?.key).toBeUndefined()\n    expect(s3Mock.calls()).toHaveLength(0)\n  })\n\n  it.each([\n    ['a video content type', { contentType: 'video/mp4', size: 1000 }],\n    ['a 30 MB size', { contentType: 'audio/mp4', size: 30 * 1024 * 1024 }],\n    ['a zero size', { contentType: 'audio/mp4', size: 0 }],\n    ['a fractional size', { contentType: 'audio/mp4', size: 10.5 }],\n    ['a string size', { contentType: 'audio/mp4', size: '1000' }],\n    ['a missing content type', { size: 1000 }],\n    ['an over-long content type', { contentType: `audio/${'x'.repeat(100)}`, size: 1000 }],\n  ])('rejects %s with 400 and creates nothing', async (_name, body) => {\n    const { agent } = await signedIn(makeApp())\n    const res = await agent.post('/api/recordings').send(body)\n    expect(res.status).toBe(400)\n    expect(res.body.data).toBeNull()\n    expect(res.body.message.length).toBeGreaterThan(0)\n    expect(await Recording.countDocuments()).toBe(0)\n  })\n\n  it('returns 401 without a session', async () => {\n    const res = await request(makeApp())\n      .post('/api/recordings')\n      .send({ contentType: 'audio/mp4', size: 1000 })\n    expect(res.status).toBe(401)\n    expect(await Recording.countDocuments()).toBe(0)\n  })\n})\n\ndescribe('POST /api/recordings/:id/confirm', () => {\n  it('promotes a valid upload: copy then delete, status ready, key under audio/', async () => {\n    const { agent, userId } = await signedIn(makeApp())\n    const { id, pendingKey } = await presign(agent)\n    mockStoredObject(5 * 1024 * 1024, 'audio/mp4')\n\n    const res = await agent.post(`/api/recordings/${id}/confirm`).send({ durationMs: 4200 })\n    expect(res.status).toBe(200)\n    expect(res.body.data).toEqual({\n      id,\n      ownerId: userId,\n      status: 'ready',\n      contentType: 'audio/mp4',\n      size: 5 * 1024 * 1024,\n      durationMs: 4200,\n      createdAt: expect.any(String),\n    })\n    // No S3 keys reach the client.\n    expect(JSON.stringify(res.body)).not.toMatch(/pending\\/|audio\\/[0-9a-f]{24}\\/|\""key\""|pendingKey/)\n\n    const head = s3Mock.commandCalls(HeadObjectCommand)\n    expect(head).toHaveLength(1)\n    expect(head[0].args[0].input).toEqual({ Bucket: BUCKET, Key: pendingKey })\n\n    const uuid = pendingKey.split('/').pop()\n    const audioKey = `audio/${userId}/${uuid}`\n    const copy = s3Mock.commandCalls(CopyObjectCommand)\n    expect(copy).toHaveLength(1)\n    expect(copy[0].args[0].input).toMatchObject({\n      Bucket: BUCKET,\n      Key: audioKey,\n      CopySource: `${BUCKET}/${pendingKey}`,\n    })\n\n    const del = s3Mock.commandCalls(DeleteObjectCommand)\n    expect(del).toHaveLength(1)\n    expect(del[0].args[0].input).toEqual({ Bucket: BUCKET, Key: pendingKey })\n\n    // Order: head, copy, delete.\n    const order = s3Mock.calls().map((call) => call.args[0].constructor.name)\n    expect(order).toEqual(['HeadObjectCommand', 'CopyObjectCommand', 'DeleteObjectCommand'])\n\n    const doc = await Recording.findById(id)\n    expect(doc?.status).toBe('ready')\n    expect(doc?.key).toBe(audioKey)\n  })\n\n  it('accepts a confirm without a body (durationMs is optional)', async () => {\n    const { agent } = await signedIn(makeApp())\n    const { id } = await presign(agent)\n    mockStoredObject(1000, 'audio/mp4')\n    const res = await agent.post(`/api/recordings/${id}/confirm`)\n    expect(res.status).toBe(200)\n    expect(res.body.data.durationMs).toBeNull()\n  })\n\n  it('returns an already-ready recording with 200 and no S3 calls', async () => {\n    const { agent } = await signedIn(makeApp())\n    const { id } = await presign(agent)\n    mockStoredObject(1000, 'audio/mp4')\n    const first = await agent.post(`/api/recordings/${id}/confirm`).send({ durationMs: 1000 })\n    expect(first.status).toBe(200)\n\n    s3Mock.reset()\n    const again = await agent.post(`/api/recordings/${id}/confirm`).send({ durationMs: 1000 })\n    expect(again.status).toBe(200)\n    expect(again.body.data).toEqual(first.body.data)\n    expect(s3Mock.calls()).toHaveLength(0)\n  })\n\n  it('returns 409 and leaves the recording pending when HeadObject reports NotFound', async () => {\n    const { agent } = await signedIn(makeApp())\n    const { id } = await presign(agent)\n    s3Mock.on(HeadObjectCommand).rejects(notFound())\n\n    const res = await agent.post(`/api/recordings/${id}/confirm`).send({})\n    expect(res.status).toBe(409)\n    expect(res.body.data).toBeNull()\n    expect((await Recording.findById(id))?.status).toBe('pending')\n    expect(s3Mock.commandCalls(CopyObjectCommand)).toHaveLength(0)\n  })\n\n  it('returns 200 when HeadObject misses because a concurrent confirm already finished', async () => {\n    const { agent } = await signedIn(makeApp())\n    const { id } = await presign(agent)\n    s3Mock.on(HeadObjectCommand).callsFake(async () => {\n      await Recording.updateOne(\n        { _id: id },\n        { status: 'ready', key: 'audio/x/y', size: 1000, contentType: 'audio/mp4' },\n      )\n      throw notFound()\n    })\n\n    const res = await agent.post(`/api/recordings/${id}/confirm`).send({})\n    expect(res.status).toBe(200)\n    expect(res.body.data.status).toBe('ready')\n  })\n\n  it('returns 409 when CopyObject reports NoSuchKey and the recording is still pending', async () => {\n    const { agent } = await signedIn(makeApp())\n    const { id } = await presign(agent)\n    s3Mock.on(HeadObjectCommand).resolves({ ContentLength: 1000, ContentType: 'audio/mp4' })\n    s3Mock\n      .on(CopyObjectCommand)\n      .rejects(new NoSuchKey({ $metadata: { httpStatusCode: 404 }, message: 'NoSuchKey' }))\n\n    const res = await agent.post(`/api/recordings/${id}/confirm`).send({})\n    expect(res.status).toBe(409)\n    expect((await Recording.findById(id))?.status).toBe('pending')\n  })\n\n  it.each([\n    ['a 25 MB object', 25 * 1024 * 1024, 'audio/mp4'],\n    ['an empty object', 0, 'audio/mp4'],\n    ['a non-audio object', 1000, 'text/html'],\n  ])('rejects %s with 422, marks it rejected and deletes it', async (_name, size, type) => {\n    const { agent } = await signedIn(makeApp())\n    const { id, pendingKey } = await presign(agent)\n    mockStoredObject(size, type)\n\n    const res = await agent.post(`/api/recordings/${id}/confirm`).send({})\n    expect(res.status).toBe(422)\n    expect(res.body.data).toBeNull()\n    expect((await Recording.findById(id))?.status).toBe('rejected')\n    expect(s3Mock.commandCalls(CopyObjectCommand)).toHaveLength(0)\n    const del = s3Mock.commandCalls(DeleteObjectCommand)\n    expect(del).toHaveLength(1)\n    expect(del[0].args[0].input).toEqual({ Bucket: BUCKET, Key: pendingKey })\n  })\n\n  it('still returns 200 when deleting the pending object fails', async () => {\n    vi.spyOn(console, 'error').mockImplementation(() => {})\n    const { agent } = await signedIn(makeApp())\n    const { id } = await presign(agent)\n    mockStoredObject(1000, 'audio/mp4')\n    s3Mock.on(DeleteObjectCommand).rejects(new Error('S3 hiccup'))\n\n    const res = await agent.post(`/api/recordings/${id}/confirm`).send({})\n    expect(res.status).toBe(200)\n    expect((await Recording.findById(id))?.status).toBe('ready')\n  })\n\n  it.each([\n    ['zero', 0],\n    ['negative', -5],\n    ['fractional', 12.5],\n    ['over 30 minutes', 30 * 60 * 1000 + 1],\n    ['a string', '1000'],\n  ])('rejects a %s durationMs with 400 before touching S3', async (_name, durationMs) => {\n    const { agent } = await signedIn(makeApp())\n    const { id } = await presign(agent)\n    const res = await agent.post(`/api/recordings/${id}/confirm`).send({ durationMs })\n    expect(res.status).toBe(400)\n    expect(s3Mock.calls()).toHaveLength(0)\n    expect((await Recording.findById(id))?.status).toBe('pending')\n  })\n\n  it(\""returns 404 for another user's recording without touching S3\"", async () => {\n    const app = makeApp()\n    const { agent } = await signedIn(app, alice)\n    const { id } = await presign(agent)\n    const { agent: other } = await signedIn(app, bob)\n\n    const res = await other.post(`/api/recordings/${id}/confirm`).send({})\n    expect(res.status).toBe(404)\n    expect(res.body.data).toBeNull()\n    expect(s3Mock.calls()).toHaveLength(0)\n  })\n\n  it('returns 404 for an unknown id and 400 for an invalid ObjectId', async () => {\n    const { agent } = await signedIn(makeApp())\n    const unknown = new mongoose.Types.ObjectId().toString()\n    expect((await agent.post(`/api/recordings/${unknown}/confirm`).send({})).status).toBe(404)\n    expect((await agent.post('/api/recordings/not-an-id/confirm').send({})).status).toBe(400)\n  })\n\n  it('returns 401 without a session', async () => {\n    const id = new mongoose.Types.ObjectId().toString()\n    expect((await request(makeApp()).post(`/api/recordings/${id}/confirm`)).status).toBe(401)\n  })\n\n  it('handles two concurrent confirms: both 200, one ready document, no duplicate key', async () => {\n    const { agent } = await signedIn(makeApp())\n    const { id } = await presign(agent)\n    mockStoredObject(1000, 'audio/mp4')\n\n    const [a, b] = await Promise.all([\n      agent.post(`/api/recordings/${id}/confirm`).send({ durationMs: 500 }),\n      agent.post(`/api/recordings/${id}/confirm`).send({ durationMs: 500 }),\n    ])\n    expect(a.status).toBe(200)\n    expect(b.status).toBe(200)\n    expect(a.body.data.status).toBe('ready')\n    expect(b.body.data.status).toBe('ready')\n    expect(await Recording.countDocuments()).toBe(1)\n    expect(await Recording.countDocuments({ status: 'ready' })).toBe(1)\n  })\n})\n\ndescribe('GET /api/recordings', () => {\n  it('lists only ready recordings, newest first, with owner display names', async () => {\n    const app = makeApp()\n    const { agent: a, userId: aliceId } = await signedIn(app, alice)\n    const { agent: b, userId: bobId } = await signedIn(app, bob)\n    mockStoredObject(1000, 'audio/mp4')\n\n    const older = await presign(a)\n    await a.post(`/api/recordings/${older.id}/confirm`).send({}).expect(200)\n    const newer = await presign(b)\n    await b.post(`/api/recordings/${newer.id}/confirm`).send({}).expect(200)\n    await presign(a) // stays pending\n    await Recording.collection.updateOne(\n      { _id: new mongoose.Types.ObjectId(older.id) },\n      { $set: { createdAt: new Date(Date.now() - 60_000) } },\n    )\n\n    const res = await a.get('/api/recordings')\n    expect(res.status).toBe(200)\n    expect(res.body.data.map((r: { id: string }) => r.id)).toEqual([newer.id, older.id])\n    expect(res.body.data[0]).toMatchObject({ ownerId: bobId, ownerDisplayName: 'Bob', status: 'ready' })\n    expect(res.body.data[1]).toMatchObject({ ownerId: aliceId, ownerDisplayName: 'Alice' })\n    expect(JSON.stringify(res.body)).not.toMatch(/pendingKey|\""key\""|pending\\//)\n  })\n\n  it('returns 401 without a session', async () => {\n    expect((await request(makeApp()).get('/api/recordings')).status).toBe(401)\n  })\n})\n\ndescribe('GET /api/recordings/:id/playback-url', () => {\n  it('returns a presigned GET for the audio/ key expiring in about an hour', async () => {\n    const app = makeApp()\n    const { agent, userId } = await signedIn(app, alice)\n    const { id, pendingKey } = await presign(agent)\n    mockStoredObject(1000, 'audio/mp4')\n    await agent.post(`/api/recordings/${id}/confirm`).send({}).expect(200)\n\n    // Any signed-in user may play a ready recording.\n    const { agent: listener } = await signedIn(app, bob)\n    const res = await listener.get(`/api/recordings/${id}/playback-url`)\n    expect(res.status).toBe(200)\n\n    const url = new URL(res.body.data.url)\n    expect(url.host).toBe(`${BUCKET}.s3.${REGION}.amazonaws.com`)\n    expect(url.pathname).toBe(`/audio/${userId}/${pendingKey.split('/').pop()}`)\n    expect(url.searchParams.get('X-Amz-Expires')).toBe('3600')\n    expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/)\n\n    const expiresIn = Date.parse(res.body.data.expiresAt) - Date.now()\n    expect(expiresIn).toBeGreaterThan(3590_000)\n    expect(expiresIn).toBeLessThanOrEqual(3600_000)\n  })\n\n  it('returns 404 for a pending recording and 400 for an invalid ObjectId', async () => {\n    const { agent } = await signedIn(makeApp())\n    const { id } = await presign(agent)\n    expect((await agent.get(`/api/recordings/${id}/playback-url`)).status).toBe(404)\n    expect((await agent.get('/api/recordings/nope/playback-url')).status).toBe(400)\n  })\n\n  it('returns 401 without a session', async () => {\n    const id = new mongoose.Types.ObjectId().toString()\n    expect((await request(makeApp()).get(`/api/recordings/${id}/playback-url`)).status).toBe(401)\n  })\n})\n\ndescribe('without a configured bucket', () => {\n  it('boots, and recording routes return a 503 envelope', async () => {\n    const app = createApp(loadConfig({ NODE_ENV: 'test' }), { clientDist: null, bcryptRounds: 4 })\n    expect((await request(app).get('/api/health')).status).toBe(200)\n\n    const { agent } = await signedIn(app)\n    const res = await agent.post('/api/recordings').send({ contentType: 'audio/mp4', size: 1000 })\n    expect(res.status).toBe(503)\n    expect(res.body).toEqual({ message: 'Audio storage is not configured', data: null })\n    expect((await agent.get('/api/recordings')).status).toBe(503)\n    expect(await Recording.countDocuments()).toBe(0)\n  })\n})\n""}"
+"63973dcc-1c3d-4413-a87d-972a9f6b01d4:0","2026-11-14T07:31:50.690Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\test\recordings.test.ts (file state is current in your context — no need to Read it back)"
+"f7ab6321-e635-44ee-9dc2-973431bf7751:0","2026-11-14T07:31:53.100Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server\"" && npx vitest run test/recordings.test.ts 2>&1 | tail -20"", ""description"": ""Run recordings tests before implementation (expect red)"", ""timeout"": 300000}"
+"8384e9ec-a77f-4730-ac35-7788e4617876:0","2026-11-14T07:31:55.626Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/recordings.test.ts [ test/recordings.test.ts ]
+Error: Cannot find module '../src/recordings/recording.model.js' imported from C:/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server/test/recordings.test.ts
+ ❯ test/recordings.test.ts:16:1
+     14| import { User } from '../src/auth/user.model.js'
+     15| import { loadConfig } from '../src/config.js'
+     16| import { Recording } from '../src/recordings/recording.model.js'
+       | ^
+     17|
+     18| const BUCKET = 'chorus-audio'
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  01:31:54
+   Duration  988ms (setup 94%, transform 5%, worker 1%)"
+"ea9edff6-18fd-4d9b-a18e-225e65afdfb4:0","2026-11-14T07:31:57.943Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""mkdir -p \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server/src/recordings\"" \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server/src/storage\"""", ""description"": ""Create recordings and storage directories""}"
+"3b3479ff-520f-4314-a7ec-f35b2d297853:0","2026-11-14T07:31:58.061Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","(Bash completed with no output)"
+"421f36d0-cb0c-43ef-b19b-9eff39f68989:0","2026-11-14T07:32:05.598Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\recordings\\recording.model.ts"", ""content"": ""// Recording metadata (R3): the audio itself lives only in S3. A recording is\n// `pending` from presign until confirm promotes its object to `audio/` (KTD8).\n// JSON serialization never includes S3 keys.\nimport type { RecordingDto, RecordingStatus } from '@exquisite-chorus/shared'\nimport { model, Schema, type HydratedDocument, type Types } from 'mongoose'\n\nexport const RECORDING_STATUSES: readonly RecordingStatus[] = ['pending', 'ready', 'rejected']\n\nexport interface RecordingFields {\n  owner: Types.ObjectId\n  status: RecordingStatus\n  /** `pending/{userId}/{uuid}`: where the browser uploads. */\n  pendingKey: string\n  /** `audio/{userId}/{uuid}`: set when the recording becomes ready. */\n  key?: string\n  contentType: string\n  size?: number\n  durationMs?: number\n  /** Unused until projects exist. */\n  project?: Types.ObjectId\n  createdAt: Date\n  updatedAt: Date\n}\n\nconst recordingSchema = new Schema<RecordingFields>(\n  {\n    owner: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },\n    status: { type: String, enum: RECORDING_STATUSES, required: true, default: 'pending' },\n    pendingKey: { type: String, required: true },\n    key: { type: String, unique: true, sparse: true },\n    contentType: { type: String, required: true },\n    size: { type: Number },\n    durationMs: { type: Number },\n    project: { type: Schema.Types.ObjectId },\n  },\n  {\n    timestamps: true,\n    toJSON: {\n      versionKey: false,\n      transform: (_doc, ret): RecordingDto => toRecordingDto(ret as unknown as RecordingFields & { _id: unknown }),\n    },\n  },\n)\n\nrecordingSchema.index({ status: 1, createdAt: -1 })\n\nexport const Recording = model<RecordingFields>('Recording', recordingSchema)\n\nexport type RecordingDocument = HydratedDocument<RecordingFields>\n\n/** The client-facing shape, from a document or a lean object. */\nexport function toRecordingDto(\n  rec: Pick<RecordingFields, 'owner' | 'status' | 'contentType' | 'size' | 'durationMs' | 'createdAt'> & {\n    _id: unknown\n  },\n  ownerDisplayName?: string,\n): RecordingDto {\n  return {\n    id: String(rec._id),\n    ownerId: String(rec.owner),\n    ...(ownerDisplayName === undefined ? {} : { ownerDisplayName }),\n    status: rec.status,\n    contentType: rec.contentType,\n    size: rec.size ?? null,\n    durationMs: rec.durationMs ?? null,\n    createdAt: new Date(rec.createdAt).toISOString(),\n  }\n}\n""}"
+"daac4555-799f-4dbb-97f7-ff5053efe7ee:0","2026-11-14T07:32:05.621Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\recordings\recording.model.ts (file state is current in your context — no need to Read it back)"
+"4ac617de-3840-4936-96b3-0516a0a6c9a7:0","2026-11-14T07:32:07.549Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server\"" && npx vitest run test/recordings.test.ts 2>&1 | grep -E \""✓|×|FAIL|Tests \"" | head -60"", ""description"": ""Run recordings tests with model only (expect red)"", ""timeout"": 300000}"
+"2b3445c9-4051-417d-9485-571877fa9783:0","2026-11-14T07:32:10.779Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","     × returns 201 with a presigned POST whose policy pins size, exact type and a pending key 58ms
+     × rejects a video content type with 400 and creates nothing 14ms
+     × rejects a 30 MB size with 400 and creates nothing 14ms
+     × rejects a zero size with 400 and creates nothing 12ms
+     × rejects a fractional size with 400 and creates nothing 13ms
+     × rejects a string size with 400 and creates nothing 13ms
+     × rejects a missing content type with 400 and creates nothing 11ms
+     × rejects an over-long content type with 400 and creates nothing 11ms
+     × returns 401 without a session 5ms
+     × promotes a valid upload: copy then delete, status ready, key under audio/ 12ms
+     × accepts a confirm without a body (durationMs is optional) 11ms
+     × returns an already-ready recording with 200 and no S3 calls 10ms
+     × returns 409 and leaves the recording pending when HeadObject reports NotFound 10ms
+     × returns 200 when HeadObject misses because a concurrent confirm already finished 10ms
+     × returns 409 when CopyObject reports NoSuchKey and the recording is still pending 11ms
+     × rejects a 25 MB object with 422, marks it rejected and deletes it 12ms
+     × rejects an empty object with 422, marks it rejected and deletes it 10ms
+     × rejects a non-audio object with 422, marks it rejected and deletes it 10ms
+     × still returns 200 when deleting the pending object fails 10ms
+     × rejects a zero durationMs with 400 before touching S3 10ms
+     × rejects a negative durationMs with 400 before touching S3 10ms
+     × rejects a fractional durationMs with 400 before touching S3 10ms
+     × rejects a over 30 minutes durationMs with 400 before touching S3 10ms
+     × rejects a a string durationMs with 400 before touching S3 10ms
+     × returns 404 for another user's recording without touching S3 10ms
+     × returns 404 for an unknown id and 400 for an invalid ObjectId 13ms
+     × returns 401 without a session 5ms
+     × handles two concurrent confirms: both 200, one ready document, no duplicate key 10ms
+     × lists only ready recordings, newest first, with owner display names 16ms
+     × returns 401 without a session 4ms
+     × returns a presigned GET for the audio/ key expiring in about an hour 9ms
+     × returns 404 for a pending recording and 400 for an invalid ObjectId 10ms
+     × returns 401 without a session 6ms
+     × boots, and recording routes return a 503 envelope 11ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 34 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  test/recordings.test.ts > POST /api/recordings (presign) > returns 201 with a presigned POST whose policy pins size, exact type and a pending key
+ FAIL  test/recordings.test.ts > POST /api/recordings (presign) > rejects a video content type with 400 and creates nothing
+ FAIL  test/recordings.test.ts > POST /api/recordings (presign) > rejects a 30 MB size with 400 and creates nothing
+ FAIL  test/recordings.test.ts > POST /api/recordings (presign) > rejects a zero size with 400 and creates nothing
+ FAIL  test/recordings.test.ts > POST /api/recordings (presign) > rejects a fractional size with 400 and creates nothing
+ FAIL  test/recordings.test.ts > POST /api/recordings (presign) > rejects a string size with 400 and creates nothing
+ FAIL  test/recordings.test.ts > POST /api/recordings (presign) > rejects a missing content type with 400 and creates nothing
+ FAIL  test/recordings.test.ts > POST /api/recordings (presign) > rejects an over-long content type with 400 and creates nothing
+ FAIL  test/recordings.test.ts > POST /api/recordings (presign) > returns 401 without a session
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/confirm > promotes a valid upload: copy then delete, status ready, key under audio/
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/confirm > accepts a confirm without a body (durationMs is optional)
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/confirm > returns an already-ready recording with 200 and no S3 calls
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/confirm > returns 409 and leaves the recording pending when HeadObject reports NotFound
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/confirm > returns 200 when HeadObject misses because a concurrent confirm already finished
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/confirm > returns 409 when CopyObject reports NoSuchKey and the recording is still pending
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/confirm > rejects a 25 MB object with 422, marks it rejected and deletes it
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/confirm > rejects an empty object with 422, marks it rejected and deletes it
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/confirm > rejects a non-audio object with 422, marks it rejected and deletes it
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/confirm > still returns 200 when deleting the pending object fails
+ FAIL  test/recordings.test.ts > POST /api/recordings/:id/c
+[... truncated, 5704 characters total]"
+"308e3545-8fd7-416f-b8ea-da941813db88:0","2026-11-14T07:32:23.707Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\storage\\s3.ts"", ""content"": ""// The app's only S3 access: presigned POST for uploads (KTD7), HeadObject and\n// copy/delete for confirm (KTD8), and presigned GET for playback (KTD9).\n// Tests inject an S3Client with fake credentials and mock its commands.\nimport {\n  CopyObjectCommand,\n  DeleteObjectCommand,\n  GetObjectCommand,\n  HeadObjectCommand,\n  S3Client,\n} from '@aws-sdk/client-s3'\nimport { createPresignedPost } from '@aws-sdk/s3-presigned-post'\nimport { getSignedUrl } from '@aws-sdk/s3-request-presigner'\nimport type { Config } from '../config.js'\n\nexport const MAX_UPLOAD_BYTES = 20 * 1024 * 1024\nexport const UPLOAD_POLICY_SECONDS = 5 * 60\nexport const PLAYBACK_URL_SECONDS = 60 * 60\n\n/** One client per app. Explicit keys if configured, else the default provider chain. */\nexport function createS3Client(config: Config): S3Client {\n  const { region, accessKeyId, secretAccessKey } = config.aws\n  return new S3Client({\n    region,\n    ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),\n    // Keep the SDK from adding checksum parameters that presigned browser\n    // requests cannot satisfy.\n    requestChecksumCalculation: 'WHEN_REQUIRED',\n  })\n}\n\nexport interface ObjectInfo {\n  size: number\n  contentType: string\n}\n\nexport interface Storage {\n  presignUpload(input: { key: string; contentType: string }): Promise<{\n    url: string\n    fields: Record<string, string>\n  }>\n  /** Throws the SDK's NotFound when the object is missing (see isMissingObject). */\n  headObject(key: string): Promise<ObjectInfo>\n  promote(fromKey: string, toKey: string): Promise<void>\n  deleteObject(key: string): Promise<void>\n  presignPlayback(key: string): Promise<{ url: string; expiresAt: string }>\n}\n\nfunction encodeKey(key: string): string {\n  return key.split('/').map(encodeURIComponent).join('/')\n}\n\nexport function s3Storage(client: S3Client, bucket: string): Storage {\n  return {\n    async presignUpload({ key, contentType }) {\n      return createPresignedPost(client, {\n        Bucket: bucket,\n        Key: key,\n        Conditions: [\n          ['content-length-range', 1, MAX_UPLOAD_BYTES],\n          ['eq', '$Content-Type', contentType],\n          { key },\n        ],\n        Fields: { 'Content-Type': contentType },\n        Expires: UPLOAD_POLICY_SECONDS,\n      })\n    },\n\n    async headObject(key) {\n      const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }))\n      return { size: head.ContentLength ?? 0, contentType: head.ContentType ?? '' }\n    },\n\n    async promote(fromKey, toKey) {\n      await client.send(\n        new CopyObjectCommand({\n          Bucket: bucket,\n          Key: toKey,\n          CopySource: `${encodeURIComponent(bucket)}/${encodeKey(fromKey)}`,\n        }),\n      )\n    },\n\n    async deleteObject(key) {\n      await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))\n    },\n\n    async presignPlayback(key) {\n      const expiresAt = new Date(Date.now() + PLAYBACK_URL_SECONDS * 1000).toISOString()\n      const url = await getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), {\n        expiresIn: PLAYBACK_URL_SECONDS,\n      })\n      return { url, expiresAt }\n    },\n  }\n}\n\n/** True for the SDK errors S3 returns when an object does not exist. */\nexport function isMissingObject(err: unknown): boolean {\n  if (typeof err !== 'object' || err === null) return false\n  const { name, $metadata } = err as { name?: unknown; $metadata?: { httpStatusCode?: number } }\n  return name === 'NotFound' || name === 'NoSuchKey' || $metadata?.httpStatusCode === 404\n}\n""}"
+"e04e0c22-804f-4511-9077-028003794b1d:0","2026-11-14T07:32:23.730Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\storage\s3.ts (file state is current in your context — no need to Read it back)"
+"1f94dc97-7319-4d8b-8ee0-460d83914185:0","2026-11-14T07:32:56.512Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Write {""file_path"": ""C:\\Users\\User\\Dropbox\\UIUC\\2026 Fall\\CS 409 Art of Web Programming\\Project\\server\\src\\recordings\\routes.ts"", ""content"": ""// /api/recordings: presign an upload, confirm it against S3, list ready\n// recordings, and issue playback URLs (KTD7–KTD9). Every route needs a session.\nimport { randomUUID } from 'node:crypto'\nimport type {\n  CreateUploadRequest,\n  CreateUploadResponse,\n  PlaybackUrlResponse,\n  RecordingDto,\n} from '@exquisite-chorus/shared'\nimport { Router, type RequestHandler, type Response } from 'express'\nimport { Types } from 'mongoose'\nimport { requireAuth } from '../auth/guards.js'\nimport { User } from '../auth/user.model.js'\nimport { HttpError, respond } from '../http.js'\nimport { isMissingObject, MAX_UPLOAD_BYTES, type ObjectInfo, type Storage } from '../storage/s3.js'\nimport { Recording, toRecordingDto, type RecordingDocument } from './recording.model.js'\n\nexport const STORAGE_NOT_CONFIGURED = 'Audio storage is not configured'\nexport const CONTENT_TYPE_MAX = 100\nexport const DURATION_MAX_MS = 30 * 60 * 1000\nexport const LIST_LIMIT = 100\n\nfunction field(body: unknown, name: string): unknown {\n  return typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[name] : undefined\n}\n\nfunction isAudioType(value: unknown): value is string {\n  return typeof value === 'string' && value.startsWith('audio/') && value.length <= CONTENT_TYPE_MAX\n}\n\nfunction isValidSize(value: unknown): value is number {\n  return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= MAX_UPLOAD_BYTES\n}\n\nfunction parseCreateUpload(body: unknown): CreateUploadRequest {\n  const contentType = field(body, 'contentType')\n  const size = field(body, 'size')\n  if (!isAudioType(contentType)) {\n    throw new HttpError(400, `contentType must be an audio/ type of at most ${CONTENT_TYPE_MAX} characters`)\n  }\n  if (!isValidSize(size)) {\n    throw new HttpError(400, `size must be a whole number of bytes from 1 to ${MAX_UPLOAD_BYTES}`)\n  }\n  return { contentType, size }\n}\n\nfunction parseDurationMs(body: unknown): number | undefined {\n  const durationMs = field(body, 'durationMs')\n  if (durationMs === undefined) return undefined\n  if (!Number.isInteger(durationMs) || (durationMs as number) < 1 || (durationMs as number) > DURATION_MAX_MS) {\n    throw new HttpError(400, `durationMs must be a whole number from 1 to ${DURATION_MAX_MS}`)\n  }\n  return durationMs as number\n}\n\nfunction parseId(raw: string | string[] | undefined): Types.ObjectId {\n  if (typeof raw !== 'string' || !/^[0-9a-f]{24}$/i.test(raw)) {\n    throw new HttpError(400, 'Invalid recording id')\n  }\n  return new Types.ObjectId(raw)\n}\n\nfunction isAcceptableObject(info: ObjectInfo): boolean {\n  return isValidSize(info.size) && isAudioType(info.contentType)\n}\n\nfunction sendRecording(res: Response, rec: RecordingDocument): void {\n  respond<RecordingDto>(res, 200, 'OK', toRecordingDto(rec))\n}\n\n/** Removing a pending object is best effort: the bucket's lifecycle rule expires `pending/`. */\nasync function deleteQuietly(storage: Storage, key: string): Promise<void> {\n  try {\n    await storage.deleteObject(key)\n  } catch (err) {\n    console.error(`Could not delete ${key}; the pending/ lifecycle rule will expire it.`, err)\n  }\n}\n\nexport function recordingsRouter(storage: Storage | null): Router {\n  const requireStorage: RequestHandler = (_req, _res, next) => {\n    if (!storage) throw new HttpError(503, STORAGE_NOT_CONFIGURED)\n    next()\n  }\n\n  const router = Router()\n  router.use('/recordings', requireAuth, requireStorage)\n\n  router.post('/recordings', async (req, res) => {\n    const input = parseCreateUpload(req.body)\n    const owner = req.user!._id\n    const pendingKey = `pending/${String(owner)}/${randomUUID()}`\n    const rec = await Recording.create({ owner, status: 'pending', pendingKey, contentType: input.contentType })\n    const { url, fields } = await storage!.presignUpload({ key: pendingKey, contentType: input.contentType })\n    respond<CreateUploadResponse>(res, 201, 'Upload URL created', { recordingId: rec.id, url, fields })\n  })\n\n  router.post('/recordings/:id/confirm', async (req, res) => {\n    const id = parseId(req.params.id)\n    const durationMs = parseDurationMs(req.body)\n    const owner = req.user!._id\n    const rec = await Recording.findOne({ _id: id, owner })\n    if (!rec) throw new HttpError(404, 'Recording not found')\n    if (rec.status === 'ready') return sendRecording(res, rec)\n    if (rec.status === 'rejected') throw new HttpError(422, 'This upload was rejected')\n\n    const { pendingKey } = rec\n    const key = `audio/${String(owner)}/${pendingKey.split('/').pop()}`\n\n    // The pending object can be missing because it was never uploaded, or\n    // because a concurrent confirm already promoted and deleted it.\n    const onMissing = async (err: unknown): Promise<void> => {\n      if (!isMissingObject(err)) throw err\n      const current = await Recording.findOne({ _id: id, owner })\n      if (current?.status === 'ready') return sendRecording(res, current)\n      throw new HttpError(409, 'The upload has not reached storage yet')\n    }\n\n    let info: ObjectInfo\n    try {\n      info = await storage!.headObject(pendingKey)\n    } catch (err) {\n      return onMissing(err)\n    }\n\n    if (!isAcceptableObject(info)) {\n      await Recording.updateOne({ _id: id, owner, status: 'pending' }, { status: 'rejected' })\n      await deleteQuietly(storage!, pendingKey)\n      throw new HttpError(422, 'Upload must be an audio file from 1 byte to 20 MB')\n    }\n\n    try {\n      await storage!.promote(pendingKey, key)\n    } catch (err) {\n      return onMissing(err)\n    }\n\n    // Conditional on still pending, so a concurrent confirm cannot write twice.\n    const ready = await Recording.findOneAndUpdate(\n      { _id: id, owner, status: 'pending' },\n      {\n        status: 'ready',\n        key,\n        size: info.size,\n        contentType: info.contentType,\n        ...(durationMs === undefined ? {} : { durationMs }),\n      },\n      { returnDocument: 'after' },\n    )\n    if (!ready) {\n      const current = await Recording.findOne({ _id: id, owner })\n      if (current?.status === 'ready') return sendRecording(res, current)\n      throw new HttpError(409, 'The recording changed during confirmation; try again')\n    }\n\n    await deleteQuietly(storage!, pendingKey)\n    sendRecording(res, ready)\n  })\n\n  router.get('/recordings', async (_req, res) => {\n    const recs = await Recording.find({ status: 'ready' })\n      .sort({ createdAt: -1, _id: -1 })\n      .limit(LIST_LIMIT)\n      .lean()\n    const ownerIds = [...new Set(recs.map((rec) => String(rec.owner)))]\n    const owners = await User.find({ _id: { $in: ownerIds } }, { displayName: 1 }).lean()\n    const names = new Map(owners.map((user) => [String(user._id), user.displayName]))\n    const data = recs.map((rec) => toRecordingDto(rec, names.get(String(rec.owner)) ?? ''))\n    respond<RecordingDto[]>(res, 200, 'OK', data)\n  })\n\n  router.get('/recordings/:id/playback-url', async (req, res) => {\n    const id = parseId(req.params.id)\n    const rec = await Recording.findOne({ _id: id, status: 'ready' })\n    if (!rec?.key) throw new HttpError(404, 'Recording not found')\n    respond<PlaybackUrlResponse>(res, 200, 'OK', await storage!.presignPlayback(rec.key))\n  })\n\n  return router\n}\n""}"
+"814b83c9-8e4c-440a-9088-ef190956d69e:0","2026-11-14T07:32:56.533Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","File created successfully at: C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\server\src\recordings\routes.ts (file state is current in your context — no need to Read it back)"
+"d8c1954c-8b6f-4839-be5b-3c2f2141a524:0","2026-11-14T07:33:04.368Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server/src\"" && python - <<'EOF'\np='app.ts'\ns=open(p,encoding='utf-8').read()\ns=s.replace(\""\""\""import express, { Router, type Express } from 'express'\""\""\"",\""\""\""import type { S3Client } from '@aws-sdk/client-s3'\nimport express, { Router, type Express } from 'express'\""\""\"")\ns=s.replace(\""\""\""import { apiNotFound, errorHandler, respond } from './http.js'\n\""\""\"",\""\""\""import { apiNotFound, errorHandler, respond } from './http.js'\nimport { recordingsRouter } from './recordings/routes.js'\nimport { createS3Client, s3Storage } from './storage/s3.js'\n\""\""\"")\ns=s.replace(\""\""\""  bcryptRounds?: number\n}\""\""\"",\""\""\""  bcryptRounds?: number\n  /** S3 client. Defaults to one built from config.aws; tests pass one with fake credentials. */\n  s3?: S3Client\n}\""\""\"")\ns=s.replace(\""\""\""  // API: built-in routers, then feature routers (recordings mounts in U4).\n  app.use('/api', healthRouter())\n  app.use('/api', authRouter(config, { bcryptRounds: deps.bcryptRounds }))\n\""\""\"",\""\""\""  // Without a bucket (local dev without AWS) the app still boots and the\n  // recording routes answer 503.\n  const bucket = config.aws.bucket\n  const storage = bucket ? s3Storage(deps.s3 ?? createS3Client(config), bucket) : null\n\n  // API: built-in routers, then extra routers.\n  app.use('/api', healthRouter())\n  app.use('/api', authRouter(config, { bcryptRounds: deps.bcryptRounds }))\n  app.use('/api', recordingsRouter(storage))\n\""\""\"")\nopen(p,'w',encoding='utf-8',newline='').write(s)\nEOF\ngit diff --stat app.ts; cd ../test && sed -i \""s/\\['zero', 0\\],/['a zero', 0],/; s/\\['negative', -5\\],/['a negative', -5],/; s/\\['fractional', 12.5\\],/['a fractional', 12.5],/; s/\\['over 30 minutes', 30/['an over-30-minute', 30/; s/rejects a %s durationMs/rejects %s durationMs/\"" recordings.test.ts && grep -n \""durationMs with 400\\|'a zero'\\|over-30\"" recordings.test.ts"", ""description"": ""Wire recordings router into app; fix test names""}"
+"56c242c3-0933-47d7-b767-cf47886a4ef9:0","2026-11-14T07:33:04.621Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result"," server/src/app.ts | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+282:    ['a zero', 0],
+285:    ['an over-30-minute', 30 * 60 * 1000 + 1],
+287:  ])('rejects %s durationMs with 400 before touching S3', async (_name, durationMs) => {
+[This command modified 1 file you've previously read: server\test\recordings.test.ts. Call Read before editing.]"
+"8364de2b-10b2-4d56-a36e-951b822a7bcc:0","2026-11-14T07:33:06.914Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project/server\"" && npx vitest run 2>&1 | grep -E \""×|FAIL|Tests |Test Files|Error|expected\"" | head -40"", ""description"": ""Run all server tests"", ""timeout"": 300000}"
+"855e1b4d-7209-419a-a044-f97ce5e4c5b1:0","2026-11-14T07:33:10.225Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result"," Test Files  3 passed (3)
+      Tests  80 passed (80)"
+"61f0ca05-1f66-4870-89dc-85ac4617b6b4:0","2026-11-14T07:33:13.037Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && (npm run lint 2>&1 | tail -6; echo \""LINT EXIT ${PIPESTATUS[0]}\""); (npm run typecheck 2>&1 | tail -15; echo \""TC EXIT ${PIPESTATUS[0]}\"")"", ""description"": ""Run lint and typecheck"", ""timeout"": 300000}"
+"d7e4f228-4a14-46a8-baa5-4c7f48faf50b:0","2026-11-14T07:33:17.633Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result","> [redacted-email] lint
+> oxlint
+
+LINT EXIT 0
+> [redacted-email] typecheck
+> npm run typecheck --workspaces
+
+
+> @exquisite-chorus/[redacted-email] typecheck
+> tsc --noEmit -p .
+
+
+> @exquisite-chorus/[redacted-email] typecheck
+> tsc --noEmit -p .
+
+
+> @exquisite-chorus/[redacted-email] typecheck
+> tsc --noEmit -p .
+
+TC EXIT 0"
+"0f26bca8-86cd-4866-aa5e-39a17f49426a:0","2026-11-14T07:33:21.476Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && npm run lint 2>&1 | grep -i \""warn\\|error\\|Found\""; (npm test 2>&1 | grep -E \""Test Files|Tests |stderr|FAIL|Could not delete\""; echo \""TEST EXIT ${PIPESTATUS[0]}\""); (npm run build 2>&1 | tail -8; echo \""BUILD EXIT ${PIPESTATUS[0]}\"")"", ""description"": ""Run tests and build"", ""timeout"": 600000}"
+"86b4f1e6-6465-4991-a552-b35acf2918b2:0","2026-11-14T07:33:29.249Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result"," Test Files  3 passed (3)
+      Tests  80 passed (80)
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+TEST EXIT 0
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-mBqDWa-j.js  219.58 kB │ gzip: 68.60 kB
+
+[32m✓ built in 89ms[39m
+
+> @exquisite-chorus/[redacted-email] build
+> tsc -p tsconfig.build.json
+
+BUILD EXIT 0"
+"3827d9d1-caeb-4ec0-8380-89d1a86e1f0f:0","2026-11-14T07:33:31.558Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\"" && git status --short && git diff server/package.json"", ""description"": ""Show changed files""}"
+"5dad1b58-a92c-4467-bf43-8af676f5e195:0","2026-11-14T07:33:31.699Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","subagent_tool_result"," M llm_logs_raburt3.csv
+ M package-lock.json
+ M server/package.json
+ M server/src/app.ts
+ M shared/src/index.ts
+?? server/src/recordings/
+?? server/src/storage/
+?? server/test/recordings.test.ts
+?? shared/src/recordings.ts
+diff --git a/server/package.json b/server/package.json
+index b46f1d6..3fb3815 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -12,6 +12,9 @@
+     ""test:watch"": ""vitest""
+   },
+   ""dependencies"": {
++    ""@aws-sdk/client-s3"": ""3.1169.0"",
++    ""@aws-sdk/s3-presigned-post"": ""3.1169.0"",
++    ""@aws-sdk/s3-request-presigner"": ""3.1169.0"",
+     ""bcryptjs"": ""^3.0.3"",
+     ""connect-mongo"": ""^6.0.0"",
+     ""dotenv"": ""^18.0.10"",
+@@ -27,6 +30,7 @@
+     ""@types/express-session"": ""^1.19.0"",
+     ""@types/node"": ""^24.19.2"",
+     ""@types/supertest"": ""^7.2.1"",
++    ""aws-sdk-client-mock"": ""^4.1.0"",
+     ""mongodb-memory-server"": ""^11.3.0"",
+     ""supertest"": ""^7.3.2"",
+     ""tsx"": ""^4.23.15"","
+"e54b8570-ef39-4281-b138-f82a60e6719a:0","2026-11-14T07:33:48.024Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","subagent_response","U4 is in place and all four gates pass (lint, typecheck, test, build). Nothing is staged or committed.
+
+**(a) Files**
+- Created:
+  - `server/src/storage/s3.ts`
+  - `server/src/recordings/recording.model.ts`
+  - `server/src/recordings/routes.ts`
+  - `shared/src/recordings.ts`
+  - `server/test/recordings.test.ts`
+- Modified:
+  - `server/src/app.ts`: `AppDeps.s3?: S3Client`; mounts `recordingsRouter`, which answers 503 when there is no bucket.
+  - `shared/src/index.ts`: re-exports the new types.
+  - `server/package.json` and `package-lock.json`: new AWS dependencies.
+- `llm_logs_raburt3.csv` was already modified before I started; I did not touch it.
+
+All paths are under `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\`.
+
+**(b) Evidence**
+- **behavior_changed:** yes. There are four new signed-in routes:
+  - `POST /api/recordings` returns 201 with `{recordingId, url, fields}`.
+  - `POST /api/recordings/:id/confirm` follows your ordering: HeadObject → validate → CopyObject → conditional `findOneAndUpdate({_id, owner, status:'pending'})` → DeleteObject. A failed delete is logged and not surfaced. A missing object or a lost race re-reads the recording and returns 200 if it is ready, otherwise 409. Failed validation marks it rejected, deletes the object and returns 422. Confirming a ready recording returns 200 with no S3 calls.
+  - `GET /api/recordings` returns ready recordings, newest first, capped at 100, with `ownerDisplayName`.
+  - `GET /api/recordings/:id/playback-url` returns `{url, expiresAt}` for ready recordings only, valid for 1 hour.
+  - With no bucket configured the app still boots, and these routes return the 503 envelope ""Audio storage is not configured"".
+- **Tests added** (34 cases in `server/test/recordings.test.ts`):
+  - **Presign:**
+    - Policy has `content-length-range` 1–20971520, `eq $Content-Type`, the key and bucket, about 5 minutes' expiry, and a key under `pending/<userId>/`.
+    - Seven bad inputs return 400 and create nothing: video type, 30 MB, size 0, fractional size, string size, missing type, type over 100 characters.
+    - Signed out returns 401.
+  - **Confirm:**
+    - Happy path: Head, Copy, Delete in that order, with `CopySource` checked; status ready; key under `audio/`; no keys in the response.
+    - A confirm with no body succeeds.
+    - Confirming a ready recording returns 200 with no S3 calls.
+    - HeadObject NotFound returns 409 and leaves it pending.
+    - HeadObject NotFound after another confirm finished returns 200.
+    - CopyObject NoSuchKey returns 409.
+    - 422, rejected and deleted for a 25 MB, an empty, and a non-audio object.
+    - A failed delete still returns 200.
+    - Five invalid `durationMs` values return 400 with no S3 calls.
+    - Another user's recording returns 404 with no S3 calls; an unknown id returns 404; an invalid ObjectId returns 400; signed out returns 401.
+    - Two concurrent confirms both return 200 and leave exactly one ready document.
+  - **List:** ready only, newest first, with display names; signed out returns 401.
+  - **Playback:** URL path is the `audio/` key with `X-Amz-Expires=3600`, `expiresAt` about 1 hour ahead, and another signed-in user can fetch it; pending returns 404; invalid id returns 400; signed out returns 401.
+  - **No bucket:** app boots, routes return the 503 envelope.
+- **Red observed:**
+  - Before any code: the suite failed to load (""Cannot find module '../src/recordings/recording.model.js'"").
+  - With only the model written: 34 of 34 tests failed, because the routes did not exist yet.
+- **Commands** (run from the repo root after implementing):
+  - `npm run lint`: exit 0
+  - `npm run typecheck`: exit 0 (shared, server, client)
+  - `npm test`: exit 0; server 80 of 80 passed, client 1 of 1 passed
+  - `npm run build`: exit 0
+- **Deviations and choices:**
+  - All three `@aws-sdk/*` packages are pinned to exactly `3.1169.0` (checked with `npm view`), so they cannot drift apart. `aws-sdk-client-mock@^4.1.0` is a dev dependency.
+  - `RecordingDto` has an optional `ownerDisplayName`, filled only in list responses. I also exported a `RecordingStatus` type.
+  - On confirm, the stored `contentType` and `size` come from HeadObject, not from what the client declared at presign.
+  - Confirming a `rejected` recording returns 422 again. Your notes didn't cover this case.
+  - The list looks up owner names with a separate `User.find` instead of populate, so a deleted owner still gets an `ownerId` (with an empty display name).
+  - I added an index on `{status, createdAt}` for the list query.
+  - `CopySource` is the bucket plus the key with each path segment URL-encoded, so the slashes stay as `/`.
+  - Because the auth check and the 503 check apply to everything under `/api/recordings`, a signed-out request to an unknown path there gets 401 rather than 404.
+  - No rate limits were added and no AWS network calls were made."
+"7ddda900-80bd-4bcf-8d8e-2aaa040d31f7:0","2026-11-14T07:33:48.063Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","prompt","<task-notification>
+<task-id>aeeb07a5f2a5ede6a</task-id>
+<tool-use-id>toolu_017tU71NCujCJkwvyq6TrjNF</tool-use-id>
+<output-file>C:\Users\User\AppData\Local\Temp\claude\8eeb967062a64003\e98c1602-5de1-48cb-b5cf-ad09189e70d7\tasks\aeeb07a5f2a5ede6a.output</output-file>
+<status>completed</status>
+<summary>Agent ""Implement U4 recordings API + S3"" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>U4 is in place and all four gates pass (lint, typecheck, test, build). Nothing is staged or committed.
+
+**(a) Files**
+- Created:
+  - `server/src/storage/s3.ts`
+  - `server/src/recordings/recording.model.ts`
+  - `server/src/recordings/routes.ts`
+  - `shared/src/recordings.ts`
+  - `server/test/recordings.test.ts`
+- Modified:
+  - `server/src/app.ts`: `AppDeps.s3?: S3Client`; mounts `recordingsRouter`, which answers 503 when there is no bucket.
+  - `shared/src/index.ts`: re-exports the new types.
+  - `server/package.json` and `package-lock.json`: new AWS dependencies.
+- `llm_logs_raburt3.csv` was already modified before I started; I did not touch it.
+
+All paths are under `C:\Users\User\Dropbox\UIUC\2026 Fall\CS 409 Art of Web Programming\Project\`.
+
+**(b) Evidence**
+- **behavior_changed:** yes. There are four new signed-in routes:
+  - `POST /api/recordings` returns 201 with `{recordingId, url, fields}`.
+  - `POST /api/recordings/:id/confirm` follows your ordering: HeadObject → validate → CopyObject → conditional `findOneAndUpdate({_id, owner, status:'pending'})` → DeleteObject. A failed delete is logged and not surfaced. A missing object or a lost race re-reads the recording and returns 200 if it is ready, otherwise 409. Failed validation marks it rejected, deletes the object and returns 422. Confirming a ready recording returns 200 with no S3 calls.
+  - `GET /api/recordings` returns ready recordings, newest first, capped at 100, with `ownerDisplayName`.
+  - `GET /api/recordings/:id/playback-url` returns `{url, expiresAt}` for ready recordings only, valid for 1 hour.
+  - With no bucket configured the app still boots, and these routes return the 503 envelope ""Audio storage is not configured"".
+- **Tests added** (34 cases in `server/test/recordings.test.ts`):
+  - **Presign:**
+    - Policy has `content-length-range` 1–20971520, `eq $Content-Type`, the key and bucket, about 5 minutes' expiry, and a key under `pending/&lt;userId&gt;/`.
+    - Seven bad inputs return 400 and create nothing: video type, 30 MB, size 0, fractional size, string size, missing type, type over 100 characters.
+    - Signed out returns 401.
+  - **Confirm:**
+    - Happy path: Head, Copy, Delete in that order, with `CopySource` checked; status ready; key under `audio/`; no keys in the response.
+    - A confirm with no body succeeds.
+    - Confirming a ready recording returns 200 with no S3 calls.
+    - HeadObject NotFound returns 409 and leaves it pending.
+    - HeadObject NotFound after another confirm finished returns 200.
+    - CopyObject NoSuchKey returns 409.
+    - 422, rejected and deleted for a 25 MB, an empty, and a non-audio object.
+    - A failed delete still returns 200.
+    - Five invalid `durationMs` values return 400 with no S3 calls.
+    - Another user's recording returns 404 with no S3 calls; an unknown id returns 404; an invalid ObjectId returns 400; signed out returns 401.
+    - Two concurrent confirms both return 200 and leave exactly one ready document.
+  - **List:** ready only, newest first, with display names; signed out returns 401.
+  - **Playback:** URL path is the `audio/` key with `X-Amz-Expires=3600`, `expiresAt` about 1 hour ahead, and another signed-in user can fetch it; pending returns 404; invalid id returns 400; signed out returns 401.
+  - **No bucket:** app boots, routes return the 503 envelope.
+- **Red observed:**
+  - Before any code: the suite failed to load (""Cannot find module '../src/recordings/recording.model.js'"").
+  - With only the model written: 34 of 34 tests failed, because the routes did not exist yet.
+- **Commands** (run from the repo root after implementing):
+  - `npm run lint`: exit 0
+  - `npm run typecheck`: exit 0 (shared, server, client)
+  - `npm test`: exit 0; server 80 of 80 passed, client 1 of 1 passed
+  - `npm run build`: exit 0
+- **Deviations and choices:**
+  - All three `@aws-sdk/*` packages are pinned to exactly `3.1169.0` (checked with `npm view`), so they cannot drift apart. `aws-sdk-client-mock@^4.1.0` is a dev dependency.
+  - `RecordingDto` has an optional `ownerDisplayName`, filled only in list responses. I also exported a `RecordingStatus` type.
+  - On confirm, the stored `contentType` and `size` come from HeadObject, not from what the client declared at presign.
+  - Confirming a `rejected` recording returns 422 again. Your notes didn't cover this case.
+  - The list looks up owner names with a separate `User.find` instead of populate, so a deleted owner still gets an `ownerId` (with an empty display name).
+  - I added an index on `{status, createdAt}` for the list query.
+  - `CopySource` is the bucket plus the key with each path segment URL-encoded, so the slashes stay as `/`.
+  - Because the auth check and the 503 check apply to everything under `/api/recordings`, a signed-out request to an unknown path there gets 401 rather than 404.
+  - No rate limits were added and no AWS network calls were made.</result>
+<usage><subagent_tokens>102579</subagent_tokens><tool_uses>21</tool_uses><duration_ms>240546</duration_ms></usage>
+</task-notification>"
+"cebd6c27-41d1-4bf8-a27b-754be2e0ee57:0","2026-11-14T07:33:53.589Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","claude-opus-5-5","assistant","tool_call","Bash {""command"": ""cd \""/c/Users/User/Dropbox/UIUC/2026 Fall/CS 409 Art of Web Programming/Project\""; git status --short; (npm run lint && npm run typecheck && npm test && npm run build) > \""$TEMP/u4.log\"" 2>&1; echo \""gates exit=$?\""; grep -E \""Tests \"" \""$TEMP/u4.log\""; grep -n \""recordings\\|use(\"" server/src/app.ts; sed -n '/router.post(.\\/recordings\\/:id\\/confirm/,/^  })/p' server/src/recordings/routes.ts | head -70"", ""description"": ""Run gates and review U4 confirm route"", ""timeout"": 300000}"
+"3e566ea7-dd83-4f80-adc7-5e0675ac6db5:0","2026-11-14T07:34:05.383Z","e98c1602-5de1-48cb-b5cf-ad09189e70d7","","user","tool_result"," M llm_logs_raburt3.csv
+ M package-lock.json
+ M server/package.json
+ M server/src/app.ts
+ M shared/src/index.ts
+?? server/src/recordings/
+?? server/src/storage/
+?? server/test/recordings.test.ts
+?? shared/src/recordings.ts
+gates exit=0
+      Tests  80 passed (80)
+      Tests  1 passed (1)
+17:import { recordingsRouter } from './recordings/routes.js'
+50:  app.use(
+62:  app.use('/api', originCheck(config.appOrigins), requireJsonBody)
+63:  app.use(express.json())
+64:  app.use('/api', sessionMiddleware(config, deps.sessionStore ?? createSessionStore()))
+72:  app.use('/api', healthRouter())
+73:  app.use('/api', authRouter(config, { bcryptRounds: deps.bcryptRounds }))
+74:  app.use('/api', recordingsRouter(storage))
+75:  for (const router of deps.apiRouters ?? []) app.use('/api', router)
+76:  app.use('/api', apiNotFound)
+82:    app.use(express.static(clientDist))
+90:  app.use(errorHandler)
+  router.post('/recordings/:id/confirm', async (req, res) => {
+    const id = parseId(req.params.id)
+    const durationMs = parseDurationMs(req.body)
+    const owner = req.user!._id
+    const rec = await Recording.findOne({ _id: id, owner })
+    if (!rec) throw new HttpError(404, 'Recording not found')
+    if (rec.status === 'ready') return sendRecording(res, rec)
+    if (rec.status === 'rejected') throw new HttpError(422, 'This upload was rejected')
+
+    const { pendingKey } = rec
+    const key = `audio/${String(owner)}/${pendingKey.split('/').pop()}`
+
+    // The pending object can be missing because it was never uploaded, or
+    // because a concurrent confirm already promoted and deleted it.
+    const onMissing = async (err: unknown): Promise<void> => {
+      if (!isMissingObject(err)) throw err
+      const current = await Recording.findOne({ _id: id, owner })
+      if (current?.status === 'ready') return sendRecording(res, current)
+      throw new HttpError(409, 'The upload has not reached storage yet')
+    }
+
+    let info: ObjectInfo
+    try {
+      info = await storage!.headObject(pendingKey)
+    } catch (err) {
+      return onMissing(err)
+    }
+
+    if (!isAcceptableObject(info)) {
+      await Recording.updateOne({ _id: id, owner, status: 'pending' }, { status: 'rejected' })
+      await deleteQuietly(storage!, pendingKey)
+      throw new HttpError(422, 'Upload must be an audio file from 1 byte to 20 MB')
+    }
+
+    try {
+      await storage!.promote(pendingKey, key)
+    } catch (err) {
+      return onMissing(err)
+    }
+
+    // Conditional on still pending, so a concurrent confirm cannot write twice.
+    const ready = await Recording.findOneAndUpdate(
+      { _id: id, owner, status: 'pending' },
+      {
+        status: 'ready',
+        key,
+        size: info.size,
+        contentType: info.contentType,
+        ...(durationMs === undefined ? {} : { durationMs }),
+      },
+      { returnDocument: 'after' },
+    )
+    if (!ready) {
+      const current = await Recording.findOne({ _id: id, owner })
+      if (current?.status === 'ready') return sendRecording(res, current)
+      throw new HttpError(409, 'The recording changed during confirmation; try again')
+    }
+
+    await deleteQuietly(storage!, pendingKey)
+    sendRecording(res, ready)
+  })"
