@@ -8,6 +8,8 @@ export class FakeMediaRecorder extends EventTarget {
   static instances: FakeMediaRecorder[] = []
   /** What the browser reports after start; defaults to the requested type. */
   static actualMimeType: string | null = null
+  /** Bytes in the recorded chunk; null records a short placeholder. */
+  static takeSize: number | null = null
 
   static isTypeSupported(type: string): boolean {
     return FakeMediaRecorder.supported.includes(type)
@@ -37,7 +39,9 @@ export class FakeMediaRecorder extends EventTarget {
     if (this.state === 'inactive') return
     this.state = 'inactive'
     const data = Object.assign(new Event('dataavailable'), {
-      data: new Blob(['take-bytes'], { type: this.mimeType }),
+      data: new Blob([FakeMediaRecorder.takeSize === null ? 'take-bytes' : new Uint8Array(FakeMediaRecorder.takeSize)], {
+        type: this.mimeType,
+      }),
     })
     this.dispatchEvent(data)
     this.dispatchEvent(new Event('stop'))
@@ -138,6 +142,7 @@ export function installMedia({ durationSeconds = 3.2 }: { durationSeconds?: numb
   FakeMediaRecorder.instances = []
   FakeMediaRecorder.supported = ['audio/webm;codecs=opus']
   FakeMediaRecorder.actualMimeType = null
+  FakeMediaRecorder.takeSize = null
   FakeXHR.instances = []
   FakeXHR.statuses = []
   FakeAudioContext.instances = []

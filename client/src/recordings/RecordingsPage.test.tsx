@@ -5,6 +5,7 @@ import { envelope, type Reply, type Routes } from '../test/fakeApi.ts'
 import { domError, FakeAudioContext, FakeMediaRecorder, FakeXHR, installMedia } from '../test/fakeMedia.ts'
 import { renderApp } from '../test/renderApp.tsx'
 import { RECORDING_FAILED } from './recorder.ts'
+import { MAX_UPLOAD_BYTES, TAKE_TOO_LARGE } from './upload.ts'
 
 const ADA = { id: 'u1', email: 'ada@example.com', displayName: 'Ada Lovelace' }
 const S3 = 'https://bucket.s3.example.com/'
@@ -154,6 +155,21 @@ describe('RecordingsPage capture and upload', () => {
     const body = JSON.parse(String(calls(fetch, 'POST /api/recordings')[0][1]?.body)) as { contentType: string }
     expect(body.contentType).toBe('audio/webm;codecs=opus')
     expect((FakeXHR.instances[0].body!.get('file') as File).type).toBe('audio/webm;codecs=opus')
+  })
+
+  it('refuses a recorded take over 20 MB before offering Upload', async () => {
+    FakeMediaRecorder.takeSize = MAX_UPLOAD_BYTES + 1
+    const { fetch } = page()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Record' }))
+    await user.click(await screen.findByRole('button', { name: 'Stop' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(TAKE_TOO_LARGE)
+    expect(screen.queryByRole('button', { name: 'Upload' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Record' })).toBeEnabled()
+    expect(media.track.stop).toHaveBeenCalled()
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
   })
 
   it('releases the mic when the page unmounts while permission is pending', async () => {
@@ -393,6 +409,23 @@ describe('RecordingsPage playback', () => {
     await user.click(stop)
     for (const source of ctx.sources) expect(source.stop).toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Play together' })).toBeInTheDocument()
+  })
+
+  it('returns to Play together when every track ends on its own', async () => {
+    page()
+    const user = userEvent.setup()
+    await screen.findByText('Grace Hopper')
+    await user.click(within(rowFor('Grace Hopper')).getByRole('checkbox'))
+    await user.click(within(rowFor('Alan Turing')).getByRole('checkbox'))
+    await user.click(screen.getByRole('button', { name: 'Play together' }))
+    await screen.findByRole('button', { name: 'Stop playing together' })
+    const [first, second] = FakeAudioContext.instances[0].sources
+
+    act(() => first.onended?.())
+    expect(screen.getByRole('button', { name: 'Stop playing together' })).toBeInTheDocument()
+    act(() => second.onended?.())
+
+    expect(screen.getByRole('button', { name: 'Play together' })).toBeEnabled()
   })
 
   it('aborts Play together and names the recording that failed', async () => {

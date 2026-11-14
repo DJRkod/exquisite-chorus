@@ -17,7 +17,15 @@ import {
   type PlayingGroup,
 } from './playback.ts'
 import { RECORDING_FAILED, RecorderError, startRecording, type ActiveRecording, type Take } from './recorder.ts'
-import { checkAudioFile, measureDuration, saveTake, SaveError, type SaveFrom } from './upload.ts'
+import {
+  checkAudioFile,
+  measureDuration,
+  saveTake,
+  SaveError,
+  TAKE_TOO_LARGE,
+  TOO_LARGE,
+  type SaveFrom,
+} from './upload.ts'
 
 interface PreviewTake extends Take {
   previewUrl: string
@@ -166,7 +174,15 @@ export default function RecordingsPage() {
       setCapture({ step: 'idle' })
       return
     }
-    if (mounted.current) showTake(take)
+    if (!mounted.current) return
+    // The server would refuse this take, and Retry could never succeed.
+    const problem = checkAudioFile({ type: take.contentType, size: take.blob.size })
+    if (problem) {
+      setNotice(problem === TOO_LARGE ? TAKE_TOO_LARGE : problem)
+      setCapture({ step: 'idle' })
+      return
+    }
+    showTake(take)
   }
 
   async function handlePick(event: ChangeEvent<HTMLInputElement>) {

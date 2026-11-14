@@ -119,6 +119,29 @@ describe('play together', () => {
     for (const source of ctx.sources) expect(source.stop).toHaveBeenCalled()
   })
 
+  it('calls onEnded once, after the last source ends', () => {
+    const ctx = new FakeAudioContext()
+    const buffers = [{}, {}] as unknown as AudioBuffer[]
+    const onEnded = vi.fn()
+    startGroup(ctx as unknown as AudioContext, buffers, onEnded)
+
+    ctx.sources[0].onended?.()
+    expect(onEnded).not.toHaveBeenCalled()
+    ctx.sources[1].onended?.()
+    expect(onEnded).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not call onEnded when the group was stopped', () => {
+    const ctx = new FakeAudioContext()
+    const onEnded = vi.fn()
+    const group = startGroup(ctx as unknown as AudioContext, [{}, {}] as unknown as AudioBuffer[], onEnded)
+
+    group.stop()
+    for (const source of ctx.sources) source.onended?.()
+
+    expect(onEnded).not.toHaveBeenCalled()
+  })
+
   it('fails the whole group after one URL refresh, naming the failed track', async () => {
     const ctx = new FakeAudioContext()
     const fetchUrl = vi.fn(async (id: string) => `https://s3/${id}`)

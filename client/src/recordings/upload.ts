@@ -11,6 +11,7 @@ import { toDurationMs, type Take } from './recorder.ts'
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 export const NOT_AUDIO = 'That isn’t an audio file. Pick an audio file instead.'
 export const TOO_LARGE = 'That file is over 20 MB. Pick a smaller one.'
+export const TAKE_TOO_LARGE = 'That recording is over 20 MB, too large to save. Record a shorter take.'
 export const EMPTY_FILE = 'That file is empty. Pick another one.'
 export const UPLOAD_FAILED = 'The upload failed. Check your connection and retry.'
 export const SESSION_EXPIRED = 'Your session expired — sign in again to finish saving'
