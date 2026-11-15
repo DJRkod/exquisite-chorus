@@ -12,6 +12,26 @@ Five people split into a frontend pair, a backend pair, and a floater. Each area
 | Backend: data lead | Mongoose models, the tag and skill vocabulary, demo seed data (`server/src/models`, `shared/`) | Project model and the tag/skill list in `shared/` | |
 | Floater | Auth, S3 audio storage, Render deployment, AWS access keys, PR review, merging the pieces together | Review the first `shared/` types PR; hand out AWS keys | |
 
+## Nov 17: prototype for the heuristic evaluation
+
+In class on Nov 17, other groups get mouse control of our clickable prototype over Zoom and evaluate it. The course asks for at least 3 key interactions. A prototype is mockup screens linked together so they can be clicked through, not working code. Build it in one shared Figma file (free, clickable prototypes); any tool the course lists works too.
+
+The three interactions:
+
+1. **Sign up and choose your skills** (instruments, roles)
+2. **Start a project:** upload a track, tag it (BPM, key, genre, mood), say what it needs
+3. **Contribute:** find a project in your feed, open it, download the track, upload your amended mix
+
+| Role | Task | Done by |
+|---|---|---|
+| Frontend: visual design lead | Set up the Figma file: colors, type, buttons, form fields, and the app frame with navigation. Then design interaction 3 (feed, project page, contribute). | Style by Nov 15 night; screens Nov 16 |
+| Frontend: app logic lead | Design interaction 2 (start a project) using the shared style. | Nov 16 |
+| Backend: routes lead | Design interaction 1 (sign up, choose skills) using the shared style. | Nov 16 |
+| Backend: data lead | Write the demo content every screen uses: the skill list, tag values, and 6–8 sample projects (title, tags, needs, owner). This list later becomes the `shared/` vocabulary. | Nov 15 night |
+| Floater | Link all screens into one click-through. Write a one-page sheet for evaluators: the three tasks to try and Nielsen's 10 heuristics to rate them against. Run a dry run Nov 16 with one teammate, then present and take notes on Nov 17. | Dry run Nov 16; notes Nov 17 |
+
+Out of scope for Nov 17: working code, profile and "my projects" screens, and desktop and phone versions of every screen. Design for desktop, and make one phone version of the feed if there's time. After Nov 17, the evaluators' findings drive the revision the course requires.
+
 ## How the pairs work together
 
 - The Project model and the tag/skill list in `shared/` come first, because the feed and contributions depend on them. Both pairs agree on them before building screens or endpoints.
