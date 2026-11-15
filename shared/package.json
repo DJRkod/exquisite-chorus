@@ -1,0 +1,15 @@
+{
+  "name": "@exquisite-chorus/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "API payload types shared by client and server. Types only: consumers use `import type`.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  }
+}
