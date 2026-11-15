@@ -38,7 +38,7 @@ Decided in [the tech stack plan](docs/plans/2026-11-12-001-feat-tech-stack-plan.
 - Hosting: planned as one Render web service serving both the app and the API (not
   deployed yet)
 
-Still undecided: team roles.
+Team roles and the Nov 17 prototype tasks: [team-roles.md](team-roles.md).
 
 ## Development
 
