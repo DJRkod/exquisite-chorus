@@ -1,16 +1,8 @@
 # Team roles: sign-up sheet
 
-Five people split into a frontend pair, a backend pair, and a floater. Each area has two people who know it, so the work keeps moving when someone is sick or busy. To claim a role, write your name next to it.
+Five people split into a frontend pair, a backend pair, and a floater. Each area has two people who know it, so the work keeps moving when someone is sick or busy.
 
-## Roles
-
-| Role | Owns | First job | Name |
-|---|---|---|---|
-| Frontend: visual design lead | Visual style, layout on phones, the heuristic evaluation (design is 35% of the grade), Figma mockups | Turn the current plain screens into a designed app layout | |
-| Frontend: app logic lead | Routing, project and feed screens, calls to the API (`client/src`) | Build the project page and feed screen against the agreed API | |
-| Backend: routes lead | Endpoints for projects, tags, the feed, and contributions (`server/src`) | Project create/read endpoints | |
-| Backend: data lead | Mongoose models, the tag and skill vocabulary, demo seed data (`server/src/models`, `shared/`) | Project model and the tag/skill list in `shared/` | |
-| Floater | Auth, S3 audio storage, Render deployment, AWS access keys, PR review, merging pull requests | Review the first `shared/` types PR; hand out AWS keys | |
+**To claim a role:** in the table, change its ☐ to ☑ and put your GitHub username (for example `@octocat`) in the last column. Edit the file on GitHub and open a pull request; the pencil icon does both.
 
 ## Nov 17: prototype for the heuristic evaluation
 
@@ -22,13 +14,15 @@ The three interactions:
 2. **Start a project:** upload a track, tag it (BPM, key, genre, mood), say what it needs
 3. **Contribute:** find a project in your feed, open it, download the track, upload your amended mix
 
-| Role | Task | Done by |
-|---|---|---|
-| Frontend: visual design lead | Set up the Figma file: colors, type, buttons, form fields, and the app frame with navigation. Then design interaction 3 (feed, project page, contribute). | Style by Nov 15 night; screens Nov 16 |
-| Frontend: app logic lead | Design interaction 2 (start a project) using the shared style. | Nov 16 |
-| Backend: routes lead | Design interaction 1 (sign up, choose skills) using the shared style. | Nov 16 |
-| Backend: data lead | Write the demo content every screen uses: the skill list, tag values, and 6–8 sample projects (title, tags, needs, owner). This list later becomes the `shared/` vocabulary. | Nov 15 night |
-| Floater | Link all screens into one click-through. Write a one-page sheet for evaluators: the three tasks to try and Nielsen's 10 heuristics to rate them against. Do a dry run Nov 16 with one teammate, then present and take notes on Nov 17. | Dry run Nov 16; notes Nov 17 |
+## Roles
+
+| Taken | Role | Owns | Nov 17 task | Due | First job after Nov 17 | GitHub user |
+|---|---|---|---|---|---|---|
+| ☐ | Frontend: visual design lead | Visual style, layout on phones, the heuristic evaluation (design is 35% of the grade), Figma mockups | Set up the Figma file: colors, type, buttons, form fields, and the app frame with navigation. Then design interaction 3 (feed, project page, contribute). | Style by Nov 15 night; screens Nov 16 | Turn the current plain screens into a designed app layout | |
+| ☐ | Frontend: app logic lead | Routing, project and feed screens, calls to the API (`client/src`) | Design interaction 2 (start a project) using the shared style. | Nov 16 | Build the project page and feed screen against the agreed API | |
+| ☐ | Backend: routes lead | Endpoints for projects, tags, the feed, and contributions (`server/src`) | Design interaction 1 (sign up, choose skills) using the shared style. | Nov 16 | Project create/read endpoints | |
+| ☐ | Backend: data lead | Mongoose models, the tag and skill vocabulary, demo seed data (`server/src/models`, `shared/`) | Write the demo content every screen uses: the skill list, tag values, and 6–8 sample projects (title, tags, needs, owner). This list later becomes the `shared/` vocabulary. | Nov 15 night | Project model and the tag/skill list in `shared/` | |
+| ☐ | Floater | Auth, S3 audio storage, Render deployment, AWS access keys, PR review, merging pull requests | Link all screens into one click-through. Write a one-page sheet for evaluators: the three tasks to try and Nielsen's 10 heuristics to rate them against. Do a dry run Nov 16 with one teammate, then present and take notes on Nov 17. | Dry run Nov 16; notes Nov 17 | Review the first `shared/` types PR; hand out AWS keys | |
 
 Out of scope for Nov 17: working code, profile and "my projects" screens, and desktop and phone versions of every screen. Design for desktop, and make one phone version of the feed if there's time. After Nov 17, the evaluators' findings drive the revision the course requires.
 
