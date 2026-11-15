@@ -1,0 +1,27 @@
+{
+  "name": "exquisite-chorus",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "lint": "oxlint",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test -w server -w client",
+    "build": "npm run build -w client -w server",
+    "start": "npm run start -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7",
+    "oxlint": "^1.93.0",
+    "typescript": "~6.0.3"
+  }
+}
