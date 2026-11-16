@@ -23,3 +23,6 @@ __pycache__/
 
 # Playwright MCP snapshots
 .playwright-mcp/
+
+# NVM (Node Version Manager) settings
+.nvmrc
