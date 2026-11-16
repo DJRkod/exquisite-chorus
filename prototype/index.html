@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- page:head -->
+<title>Exquisite Chorus Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a mixing-desk app shell. One centered column of screens under a slim top bar; record-red marks the one primary action per screen, teal marks a skill match. */
+:root {
+  --bg: #f4f5f9;
+  --surface: #ffffff;
+  --sunken: #eceef5;
+  --ink: #161b2e;
+  --muted: #5a6178;
+  --line: #d9dde9;
+  --rec: #d93a40;
+  --rec-ink: #ffffff;
+  --match: #0b7480;
+  --match-bg: #dff2f3;
+  --wave: #b8bfd3;
+  --wave-on: #161b2e;
+  --focus: #3b5bdb;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1220; --surface: #181c2e; --sunken: #13172a; --ink: #e8eaf2; --muted: #9ba2b9;
+    --line: #2b3150; --rec: #ff656b; --rec-ink: #1a0b0c; --match: #5cc8d0; --match-bg: #133338;
+    --wave: #3a4263; --wave-on: #e8eaf2; --focus: #8ea2ff; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1220; --surface: #181c2e; --sunken: #13172a; --ink: #e8eaf2; --muted: #9ba2b9;
+  --line: #2b3150; --rec: #ff656b; --rec-ink: #1a0b0c; --match: #5cc8d0; --match-bg: #133338;
+  --wave: #3a4263; --wave-on: #e8eaf2; --focus: #8ea2ff; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 96px;
+}
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.15; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.7rem, 4vw, 2.3rem); font-weight: 700; }
+h2 { font-size: 1.3rem; font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 500; }
+p { margin: 0; }
+a { color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.data { font-family: var(--font-data); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+/* top bar */
+.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px))) calc(-1 * max(16px, env(safe-area-inset-right, 0px)));
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.bar-inner { max-width: 880px; margin: 0 auto; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.logo { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; text-decoration: none; }
+.logo-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--rec); box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--rec); }
+.nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.nav a, .nav button { padding: 6px 10px; border-radius: 8px; text-decoration: none; border: 0; background: none; cursor: pointer; color: var(--muted); font-weight: 500; }
+.nav a[aria-current="page"] { color: var(--ink); background: var(--sunken); }
+.nav a:hover, .nav button:hover { color: var(--ink); }
+.avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--surface); font-size: 0.8rem; font-weight: 600; border: 0; cursor: pointer; }
+
+main { max-width: 880px; margin: 0 auto; padding-top: 28px; display: grid; gap: 24px; }
+.narrow { max-width: 520px; width: 100%; margin: 0 auto; display: grid; gap: 20px; }
+.stack { display: grid; gap: 12px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 16px; min-width: 0; }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 18px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-weight: 600; text-decoration: none; }
+.btn:hover { border-color: var(--ink); }
+.btn.primary { background: var(--rec); border-color: var(--rec); color: var(--rec-ink); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn[disabled] { opacity: 0.45; cursor: not-allowed; filter: none; }
+.btn.link { border: 0; background: none; padding: 4px 0; color: var(--muted); font-weight: 500; }
+.btn.link:hover { color: var(--ink); text-decoration: underline; }
+
+/* form */
+.field { display: grid; gap: 6px; }
+.field label, .field .label-text { font-weight: 600; font-size: 0.9rem; }
+.field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.field textarea { min-height: 84px; resize: vertical; }
+.hint { font-size: 0.82rem; color: var(--muted); }
+.error { font-size: 0.82rem; color: var(--rec); font-weight: 500; }
+.field.invalid input { border-color: var(--rec); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.grid2 .row select { flex: 1; min-width: 0; }
+
+/* chips */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 0.88rem; font-weight: 500; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.chip.static { cursor: default; }
+.chip.need { background: var(--sunken); border-color: transparent; }
+.chip.need.hit { background: var(--match-bg); color: var(--match); font-weight: 600; }
+
+/* steps */
+.steps { display: flex; gap: 6px; align-items: center; }
+.steps span { height: 4px; flex: 1; border-radius: 2px; background: var(--line); }
+.steps span.on { background: var(--rec); }
+
+/* cards */
+.cards { display: grid; gap: 12px; }
+.card { display: grid; grid-template-columns: 1fr; gap: 10px; text-align: left; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; cursor: pointer; }
+.card:hover { border-color: var(--ink); }
+.card-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.card.other { opacity: 0.85; }
+canvas.wave { width: 100%; height: 40px; display: block; }
+canvas.wave.big { height: 84px; cursor: pointer; }
+
+/* player */
+.player { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; background: var(--sunken); border-radius: var(--radius); padding: 14px; }
+.play { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--rec); color: var(--rec-ink); cursor: pointer; display: grid; place-items: center; }
+.play svg { width: 20px; height: 20px; fill: currentColor; }
+.time { display: flex; justify-content: space-between; margin-top: 4px; }
+
+/* dropzone */
+.drop { border: 2px dashed var(--line); border-radius: var(--radius); padding: 28px 16px; text-align: center; background: var(--sunken); cursor: pointer; display: grid; gap: 6px; justify-items: center; width: 100%; }
+.drop:hover { border-color: var(--ink); }
+.file { display: flex; gap: 12px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; background: var(--surface); flex-wrap: wrap; }
+.file-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--ink); color: var(--surface); display: grid; place-items: center; font-weight: 700; font-size: 0.7rem; font-family: var(--font-data); }
+
+/* misc */
+.how { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.how .panel { gap: 6px; }
+.how .num { font-family: var(--font-data); color: var(--rec); font-weight: 500; }
+.versions { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.versions li { display: grid; grid-template-columns: 44px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.versions li:first-child { border-top: 0; }
+.quote { border-left: 3px solid var(--line); padding-left: 12px; color: var(--muted); }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--match-bg); color: var(--match); font-size: 0.75rem; font-weight: 600; }
+.done-mark { width: 56px; height: 56px; border-radius: 50%; background: var(--match-bg); color: var(--match); display: grid; place-items: center; }
+.done-mark svg { width: 28px; height: 28px; stroke: currentColor; fill: none; stroke-width: 3; }
+.split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 720px) { .split { grid-template-columns: 1fr; } }
+
+/* toast + tasks */
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 10px; max-width: min(92vw, 460px); z-index: 20; font-size: 0.9rem; }
+.tasks-btn { position: fixed; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 15; border-radius: 999px; padding: 8px 14px; border: 1px dashed var(--muted); background: var(--surface); cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+.tasks { position: fixed; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(60px + env(safe-area-inset-bottom, 0px)); z-index: 15; width: min(340px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 10px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.18); }
+.tasks ol { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+@media (prefers-reduced-motion: no-preference) { .toast { animation: rise 0.18s ease-out; } }
+@keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } }
+</style>
+<!-- page:head-end -->
+</head>
+<body>
+<!-- page:body -->
+<header class="bar" id="bar" hidden>
+  <div class="bar-inner">
+    <a class="logo" href="#feed"><span class="logo-dot" aria-hidden="true"></span>Exquisite Chorus</a>
+    <nav class="nav" aria-label="Main">
+      <a href="#feed" data-nav="feed">Feed</a>
+      <a href="#new-upload" data-nav="new">Start a project</a>
+      <button type="button" data-soon="My projects">My projects</button>
+    </nav>
+    <button type="button" class="avatar" id="avatar" data-soon="Your profile" aria-label="Your profile">RC</button>
+  </div>
+</header>
+<main id="app" aria-live="polite"></main>
+<button type="button" class="tasks-btn" id="tasks-btn" aria-expanded="false" aria-controls="tasks">Prototype tasks</button>
+<div class="tasks" id="tasks" hidden>
+  <p class="label">For the heuristic evaluation</p>
+  <ol>
+    <li><a href="#" data-task="1">Sign up and choose what you play</a></li>
+    <li><a href="#" data-task="2">Start a project from your unfinished track</a></li>
+    <li><a href="#" data-task="3">Find a project that needs you and send it your mix</a></li>
+  </ol>
+  <p class="hint">Each link resets the prototype and opens that task's first screen. Nothing here is saved, and no audio plays.</p>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- demo content (see prototype/README.md) ----------
+  var SKILLS = {
+    Instruments: ['Vocals', 'Guitar', 'Bass', 'Drums', 'Keys', 'Synth', 'Strings', 'Brass'],
+    Studio: ['Production', 'Mixing', 'Lyrics']
+  };
+  var GENRES = ['Indie', 'Folk', 'Lo-fi', 'Hip-hop', 'R&B', 'Jazz', 'Electronic', 'Rock'];
+  var MOODS = ['Mellow', 'Dreamy', 'Upbeat', 'Dark', 'Driving'];
+  var KEYS = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+
+  function seedProjects() {
+    return [
+      { id: 'porch-chords', title: 'Porch Chords', owner: 'Maya Okafor', age: '3 days ago', bpm: 92, key: 'G major', genre: 'Folk', mood: 'Mellow', needs: ['Bass', 'Vocals'], length: 134,
+        note: 'Fingerpicked acoustic, recorded on my porch. It wants a walking bass line and a soft lead vocal, no lyrics yet so go wild.',
+        versions: [{ v: 2, what: 'Added brushed drums', who: 'Dev Patel', when: '2 days ago' }, { v: 1, what: 'Original track', who: 'Maya Okafor', when: '3 days ago' }] },
+      { id: 'night-bus', title: 'Night Bus', owner: 'Theo Lindqvist', age: '1 day ago', bpm: 84, key: 'F♯ minor', genre: 'Lo-fi', mood: 'Dreamy', needs: ['Keys', 'Drums'], length: 108,
+        note: 'Tape-warped guitar loop. Looking for Rhodes chords and a lazy beat.',
+        versions: [{ v: 1, what: 'Original track', who: 'Theo Lindqvist', when: '1 day ago' }] },
+      { id: 'copper-wire', title: 'Copper Wire', owner: 'Ana Ruiz', age: '5 hours ago', bpm: 128, key: 'A minor', genre: 'Electronic', mood: 'Driving', needs: ['Vocals', 'Lyrics'], length: 201,
+        note: 'Full instrumental is done. Needs a topline and words about leaving a city.',
+        versions: [{ v: 3, what: 'New synth bass', who: 'Kai Mendes', when: '5 hours ago' }, { v: 2, what: 'Added arp', who: 'Lena Fox', when: '2 days ago' }, { v: 1, what: 'Original track', who: 'Ana Ruiz', when: '4 days ago' }] },
+      { id: 'basement-waltz', title: 'Basement Waltz', owner: 'Jules Park', age: '2 days ago', bpm: 104, key: 'D minor', genre: 'Jazz', mood: 'Dark', needs: ['Brass', 'Bass'], length: 167,
+        note: 'Piano trio sketch in 3/4. A muted trumpet melody would make it.',
+        versions: [{ v: 1, what: 'Original track', who: 'Jules Park', when: '2 days ago' }] },
+      { id: 'low-tide', title: 'Low Tide', owner: 'Sam Adeyemi', age: '6 days ago', bpm: 70, key: 'E♭ major', genre: 'R&B', mood: 'Mellow', needs: ['Guitar', 'Vocals'], length: 152,
+        note: 'Slow jam with a drum machine and pads. Clean guitar fills and harmonies wanted.',
+        versions: [{ v: 2, what: 'Added pads', who: 'Noor Haddad', when: '4 days ago' }, { v: 1, what: 'Original track', who: 'Sam Adeyemi', when: '6 days ago' }] },
+      { id: 'static-garden', title: 'Static Garden', owner: 'Priya Nair', age: '12 hours ago', bpm: 140, key: 'C minor', genre: 'Hip-hop', mood: 'Dark', needs: ['Lyrics', 'Vocals'], length: 125,
+        note: 'Beat is finished. Looking for a verse, 16 bars.',
+        versions: [{ v: 1, what: 'Original track', who: 'Priya Nair', when: '12 hours ago' }] },
+      { id: 'second-wind', title: 'Second Wind', owner: 'Leo Brandt', age: '1 week ago', bpm: 156, key: 'E major', genre: 'Rock', mood: 'Upbeat', needs: ['Drums', 'Bass'], length: 189,
+        note: 'Two guitars and a scratch vocal. Needs a real rhythm section.',
+        versions: [{ v: 1, what: 'Original track', who: 'Leo Brandt', when: '1 week ago' }] }
+    ];
+  }
+
+  // ---------- state ----------
+  var state;
+  function resetState(signedIn) {
+    state = {
+      user: signedIn ? { name: 'Riley Chen', email: 'riley@example.com', skills: ['Bass', 'Vocals'] } : null,
+      projects: seedProjects(),
+      genre: 'All',
+      draft: null,
+      contrib: null,
+      signupErrors: {}
+    };
+  }
+  resetState(true);
+
+  // ---------- helpers ----------
+  var app = document.getElementById('app');
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function mmss(sec) { sec = Math.max(0, Math.round(sec)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
+  function initials(name) { return name.split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0].toUpperCase(); }).join('') || 'You'; }
+  function firstName(name) { return name.split(/\s+/)[0]; }
+  function byId(id) { return state.projects.find(function (p) { return p.id === id; }); }
+  function slug(s) { return (s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled') + '-' + Math.floor(Math.random() * 900 + 100); }
+  function tagLine(p) { return [p.bpm ? p.bpm + ' BPM' : null, p.key, p.genre, p.mood].filter(Boolean).join(' · '); }
+  function go(hash) { if (location.hash === '#' + hash) render(); else location.hash = hash; }
+  var toastTimer;
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 3800);
+  }
+  function soon(what) { toast(what + ' isn’t part of this prototype yet.'); }
+  function steps(n, of) { var s = ''; for (var i = 1; i <= of; i++) s += '<span class="' + (i <= n ? 'on' : '') + '"></span>'; return '<div class="stack" style="gap:6px"><p class="label">Step ' + n + ' of ' + of + '</p><div class="steps" aria-hidden="true">' + s + '</div></div>'; }
+  function chip(label, pressed, attrs) { return '<button type="button" class="chip" aria-pressed="' + (pressed ? 'true' : 'false') + '" ' + (attrs || '') + '>' + esc(label) + '</button>'; }
+  function needChips(p) {
+    var mine = state.user ? state.user.skills : [];
+    return p.needs.map(function (n) { var hit = mine.indexOf(n) >= 0; return '<span class="chip static need' + (hit ? ' hit' : '') + '">' + esc(n) + (hit ? ' · you play this' : '') + '</span>'; }).join('');
+  }
+  function fileRow(f, removeAttr) {
+    return '<div class="file"><div class="row"><span class="file-icon">' + esc(f.ext) + '</span><div><p style="font-weight:600;word-break:break-all">' + esc(f.name) + '</p><p class="data muted">' + f.length + ' · ' + f.size + '</p></div></div><button type="button" class="btn link" ' + removeAttr + '>Remove</button></div>';
+  }
+  var PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>';
+  var PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z"/></svg>';
+  var CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+  // ---------- waveform ----------
+  function rand(seed) { var h = 2166136261; for (var i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); } return function () { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 1000) / 1000; }; }
+  function drawWave(c) {
+    var css = getComputedStyle(document.documentElement);
+    var dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+    if (!w) return;
+    c.width = w * dpr; c.height = h * dpr;
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    var r = rand(c.dataset.wave), bars = Math.floor(w / 4), played = parseFloat(c.dataset.progress || '0');
+    for (var i = 0; i < bars; i++) {
+      var x = i / bars, env = Math.sin(Math.PI * Math.min(1, x * 1.15 + 0.05)) * 0.7 + 0.3;
+      var amp = Math.max(0.08, env * (0.35 + r() * 0.65)) * h * 0.92;
+      ctx.fillStyle = (x < played ? css.getPropertyValue('--wave-on') : css.getPropertyValue('--wave')).trim();
+      ctx.fillRect(i * 4, (h - amp) / 2, 2.5, amp);
+    }
+  }
+  function drawAllWaves() { document.querySelectorAll('canvas.wave').forEach(drawWave); }
+  window.addEventListener('resize', drawAllWaves);
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAllWaves); } catch (e) {}
+  new MutationObserver(drawAllWaves).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  // fake playback (the prototype has no audio)
+  var playing = null;
+  function stopPlayback() { if (playing) { cancelAnimationFrame(playing.raf); playing = null; } }
+  function togglePlay(p) {
+    var btn = document.getElementById('play'), c = document.getElementById('bigwave'), now = document.getElementById('now');
+    if (playing) { stopPlayback(); btn.innerHTML = PLAY; btn.setAttribute('aria-label', 'Play current mix'); return; }
+    var start = performance.now() - (parseFloat(c.dataset.progress || '0') * p.length * 1000);
+    btn.innerHTML = PAUSE; btn.setAttribute('aria-label', 'Pause');
+    playing = { raf: 0 };
+    (function tick(t) {
+      var pos = (t - start) / 1000;
+      if (pos >= p.length) { pos = 0; c.dataset.progress = '0'; drawWave(c); now.textContent = '0:00'; btn.innerHTML = PLAY; playing = null; return; }
+      c.dataset.progress = String(pos / p.length); drawWave(c); now.textContent = mmss(pos);
+      playing.raf = requestAnimationFrame(tick);
+    })(performance.now());
+  }
+
+  // ---------- screens ----------
+  var screens = {};
+
+  screens.welcome = function () {
+    return '<div class="narrow" style="max-width:640px;padding-top:24px">' +
+      '<div class="row"><span class="logo-dot" aria-hidden="true"></span><span class="logo">Exquisite Chorus</span></div>' +
+      '<h1>Finish your unfinished tracks with musicians who play what they need.</h1>' +
+      '<p class="muted" style="font-size:1.05rem">Post a riff, a beat or a melody, say what it’s missing, and it shows up in the feed of people who play that part.</p>' +
+      '<div class="row"><a class="btn primary" href="#signup">Create an account</a><button type="button" class="btn" data-soon="Signing in">Sign in</button></div>' +
+      '<div class="how">' +
+        '<div class="panel"><span class="num">1</span><h3>Post a track</h3><p class="muted">Upload what you have and tag what it needs: bass, vocals, lyrics.</p></div>' +
+        '<div class="panel"><span class="num">2</span><h3>Get matched</h3><p class="muted">Musicians who play those parts see it in their feed.</p></div>' +
+        '<div class="panel"><span class="num">3</span><h3>Pass it on</h3><p class="muted">Each contributor adds a part in their own DAW and uploads the new mix.</p></div>' +
+      '</div></div>';
+  };
+
+  screens.signup = function () {
+    var e = state.signupErrors, v = state.signupValues || {};
+    function f(id, label, type, ph, hint, auto) {
+      return '<div class="field' + (e[id] ? ' invalid' : '') + '"><label for="su-' + id + '">' + label + '</label>' +
+        '<input id="su-' + id + '" name="' + id + '" type="' + type + '" placeholder="' + ph + '" autocomplete="' + auto + '" value="' + esc(v[id] || '') + '"' + (e[id] ? ' aria-invalid="true" aria-describedby="su-' + id + '-err"' : '') + '>' +
+        (e[id] ? '<p class="error" id="su-' + id + '-err">' + e[id] + '</p>' : (hint ? '<p class="hint">' + hint + '</p>' : '')) + '</div>';
+    }
+    return '<div class="narrow">' + steps(1, 2) +
+      '<div class="stack"><h1>Create your account</h1><p class="muted">Next you’ll choose what you play, so your feed shows projects that need you.</p></div>' +
+      '<form class="panel" id="signup-form" novalidate>' +
+        f('name', 'Name', 'text', 'Riley Chen', 'Shown on your projects and contributions.', 'name') +
+        f('email', 'Email', 'email', 'you@example.com', '', 'email') +
+        f('password', 'Password', 'password', 'At least 8 characters', 'At least 8 characters.', 'new-password') +
+        '<button class="btn primary" type="submit">Continue</button>' +
+      '</form>' +
+      '<p class="muted">Already have an account? <button type="button" class="btn link" data-soon="Signing in">Sign in</button></p></div>';
+  };
+
+  screens.skills = function () {
+    var picked = state.user ? state.user.skills : [];
+    var groups = Object.keys(SKILLS).map(function (g) {
+      return '<div class="stack" style="gap:8px"><p class="label">' + g + '</p><div class="chips">' +
+        SKILLS[g].map(function (s) { return chip(s, picked.indexOf(s) >= 0, 'data-skill="' + esc(s) + '"'); }).join('') + '</div></div>';
+    }).join('');
+    var n = picked.length;
+    return '<div class="narrow">' + (state.onboarding ? steps(2, 2) : '') +
+      '<div class="stack"><h1>What do you play?</h1><p class="muted">Pick everything you could add to someone’s track. Your feed shows projects that need these. You can change them later.</p></div>' +
+      '<div class="panel">' + groups + '</div>' +
+      '<div class="row" style="justify-content:space-between"><p class="muted" id="skill-count">' + (n ? n + ' selected' : 'Pick at least one') + '</p>' +
+      '<button type="button" class="btn primary" id="skills-done"' + (n ? '' : ' disabled') + '>' + (state.onboarding ? 'Show my feed' : 'Save skills') + '</button></div></div>';
+  };
+
+  function card(p, other) {
+    return '<button type="button" class="card' + (other ? ' other' : '') + '" data-open="' + p.id + '">' +
+      '<div class="card-top"><h3>' + esc(p.title) + '</h3><span class="data muted">v' + p.versions[0].v + ' · ' + mmss(p.length) + '</span></div>' +
+      '<p class="muted" style="margin-top:-6px">' + esc(p.owner) + ' · ' + esc(p.age) + '</p>' +
+      '<canvas class="wave" data-wave="' + p.id + '" aria-hidden="true"></canvas>' +
+      '<p class="data muted">' + esc(tagLine(p)) + '</p>' +
+      '<div class="chips"><span class="label" style="align-self:center">Needs</span>' + needChips(p) + '</div></button>';
+  }
+
+  screens.feed = function () {
+    var mine = state.user.skills;
+    var list = state.projects.filter(function (p) { return !p.mine && (state.genre === 'All' || p.genre === state.genre); });
+    var match = list.filter(function (p) { return p.needs.some(function (n) { return mine.indexOf(n) >= 0; }); });
+    var rest = list.filter(function (p) { return match.indexOf(p) < 0; });
+    var filters = ['All'].concat(GENRES).map(function (g) { return chip(g, state.genre === g, 'data-genre="' + esc(g) + '"'); }).join('');
+    return '<div class="stack"><h1>Projects that need you</h1>' +
+      '<p class="muted">Matched to what you play: <strong>' + esc(mine.join(', ')) + '</strong>. <a href="#skills">Change skills</a></p></div>' +
+      '<div class="stack" style="gap:8px"><p class="label">Genre</p><div class="chips">' + filters + '</div></div>' +
+      (match.length ? '<div class="cards">' + match.map(function (p) { return card(p); }).join('') + '</div>' :
+        '<div class="panel"><h3>No ' + (state.genre === 'All' ? '' : esc(state.genre) + ' ') + 'projects need ' + esc(mine.join(' or ')) + ' right now.</h3><p class="muted">Try another genre, or add more skills you play.</p></div>') +
+      (rest.length ? '<div class="stack"><h2>Other projects</h2><p class="muted">These need parts you don’t play. You can still listen.</p><div class="cards">' + rest.map(function (p) { return card(p, true); }).join('') + '</div></div>' : '');
+  };
+
+  screens.project = function (id) {
+    var p = byId(id);
+    if (!p) return '<div class="panel"><h2>That project doesn’t exist.</h2><a class="btn" href="#feed">Back to the feed</a></div>';
+    var cur = p.versions[0];
+    var file = p.id + '-v' + cur.v + '.wav';
+    var versions = p.versions.map(function (v) { return '<li><span class="data muted">v' + v.v + '</span><div><p>' + esc(v.what) + '</p><p class="muted" style="font-size:0.85rem">' + esc(v.who) + ' · ' + esc(v.when) + '</p></div></li>'; }).join('');
+    var actions = p.mine
+      ? '<div class="panel"><h3>Contributions</h3><p class="muted">None yet. Mixes that musicians send you will show up here.</p></div>'
+      : '<div class="panel"><h3>Add your part</h3><p class="muted">Download the current mix, record your part in your own DAW, then upload the new mix.</p>' +
+        '<div class="stack"><button type="button" class="btn" data-download="' + esc(file) + '">Download current mix</button>' +
+        '<a class="btn primary" href="#contribute-' + p.id + '">Upload your mix</a></div></div>';
+    return '<div><a class="btn link" href="#feed">← Feed</a></div>' +
+      '<div class="stack"><div class="row">' + (p.mine ? '<span class="badge">Your project</span>' : '') + '<span class="data muted">' + esc(tagLine(p)) + '</span></div>' +
+      '<h1>' + esc(p.title) + '</h1><p class="muted">Started by ' + esc(p.owner) + ' · ' + esc(p.age) + '</p></div>' +
+      '<div class="split"><div class="stack" style="gap:20px">' +
+        '<div class="player"><button type="button" class="play" id="play" aria-label="Play current mix">' + PLAY + '</button>' +
+          '<div style="min-width:0"><p class="label">Current mix · v' + cur.v + '</p><canvas class="wave big" id="bigwave" data-wave="' + p.id + '" data-progress="0" aria-hidden="true"></canvas>' +
+          '<div class="time data muted"><span id="now">0:00</span><span>' + mmss(p.length) + '</span></div></div></div>' +
+        '<div class="stack"><h3>What it needs</h3><div class="chips">' + needChips(p) + '</div></div>' +
+        (p.note ? '<div class="stack"><h3>From ' + esc(firstName(p.owner)) + '</h3><p class="quote">' + esc(p.note) + '</p></div>' : '') +
+        '<div class="stack"><h3>Versions</h3><ul class="versions">' + versions + '</ul></div>' +
+      '</div>' + actions + '</div>';
+  };
+
+  screens.contribute = function (id) {
+    var p = byId(id);
+    if (!p) return screens.project(id);
+    var c = state.contrib && state.contrib.id === id ? state.contrib : (state.contrib = { id: id, file: null, parts: p.needs.filter(function (n) { return state.user.skills.indexOf(n) >= 0; }), note: '' });
+    var options = p.needs.concat(state.user.skills.filter(function (s) { return p.needs.indexOf(s) < 0; }));
+    var ready = c.file && c.parts.length;
+    return '<div><a class="btn link" href="#project-' + p.id + '">← ' + esc(p.title) + '</a></div>' +
+      '<div class="narrow">' +
+      '<div class="stack"><h1>Upload your mix</h1><p class="muted">Upload the whole song with your part added, not just your part on its own. ' + esc(firstName(p.owner)) + ' hears it next to the current version (v' + p.versions[0].v + ').</p></div>' +
+      '<div class="panel"><div class="field"><span class="label-text">Your mix</span>' +
+        (c.file ? fileRow(c.file, 'data-clear-contrib') : '<button type="button" class="drop" data-pick-contrib><strong>Choose an audio file</strong><span class="hint">WAV, MP3 or M4A, up to 20 MB</span></button>') +
+      '</div>' +
+      '<div class="field"><span class="label-text">What did you add?</span><div class="chips">' + options.map(function (s) { return chip(s, c.parts.indexOf(s) >= 0, 'data-part="' + esc(s) + '"'); }).join('') + '</div></div>' +
+      '<div class="field"><label for="c-note">Note to ' + esc(firstName(p.owner)) + ' <span class="muted">(optional)</span></label><textarea id="c-note" placeholder="What you played, anything you changed in the mix">' + esc(c.note) + '</textarea></div>' +
+      '<button type="button" class="btn primary" id="send"' + (ready ? '' : ' disabled') + '>Send mix to ' + esc(firstName(p.owner)) + '</button>' +
+      (ready ? '' : '<p class="hint" id="send-hint">' + (!c.file ? 'Choose your mix file to send it.' : 'Pick what you added.') + '</p>') +
+      '</div></div>';
+  };
+
+  screens.sent = function (id) {
+    var p = byId(id);
+    if (!p) return screens.project(id);
+    return '<div class="narrow" style="justify-items:start;padding-top:24px"><span class="done-mark">' + CHECK + '</span>' +
+      '<h1>Your mix is on its way to ' + esc(firstName(p.owner)) + '</h1>' +
+      '<p class="muted">' + esc(firstName(p.owner)) + ' can now play it next to v' + p.versions[0].v + ' of ' + esc(p.title) + '. You’ll find it under My projects, along with what ' + esc(firstName(p.owner)) + ' decides.</p>' +
+      '<div class="row"><a class="btn primary" href="#feed">Find another project</a><a class="btn" href="#project-' + p.id + '">Back to ' + esc(p.title) + '</a></div></div>';
+  };
+
+  screens['new-upload'] = function () {
+    var d = state.draft || (state.draft = { file: null, title: '', bpm: '', key: '', mode: 'major', genre: '', mood: '', needs: [], note: '' });
+    return '<div class="narrow">' + steps(1, 3) +
+      '<div class="stack"><h1>Start a project</h1><p class="muted">Upload the unfinished track. It can be rough: a voice memo, a loop, a demo.</p></div>' +
+      '<div class="panel">' + (d.file ? fileRow(d.file, 'data-clear-draft') : '<button type="button" class="drop" data-pick-draft><strong>Choose an audio file</strong><span class="hint">WAV, MP3 or M4A, up to 20 MB</span></button>') + '</div>' +
+      '<div class="row" style="justify-content:space-between"><a class="btn link" href="#feed">Cancel</a><button type="button" class="btn primary" id="to-details"' + (d.file ? '' : ' disabled') + '>Continue</button></div></div>';
+  };
+
+  screens['new-details'] = function () {
+    var d = state.draft;
+    if (!d || !d.file) return screens['new-upload']();
+    var keyOpts = '<option value="">Not sure</option>' + KEYS.map(function (k) { return '<option' + (d.key === k ? ' selected' : '') + '>' + k + '</option>'; }).join('');
+    var genreOpts = '<option value="">None</option>' + GENRES.map(function (g) { return '<option' + (d.genre === g ? ' selected' : '') + '>' + g + '</option>'; }).join('');
+    var all = SKILLS.Instruments.concat(SKILLS.Studio);
+    return '<div class="narrow">' + steps(2, 3) +
+      '<div class="stack"><h1>Describe it</h1><p class="muted">Only the title and what it needs are required. Tags help the right people find it.</p></div>' +
+      '<div class="panel">' +
+        '<div class="field' + (state.titleError ? ' invalid' : '') + '"><label for="d-title">Title</label><input id="d-title" value="' + esc(d.title) + '" placeholder="Night Shift"' + (state.titleError ? ' aria-invalid="true"' : '') + '>' + (state.titleError ? '<p class="error">Give your project a title.</p>' : '') + '</div>' +
+        '<div class="grid2">' +
+          '<div class="field"><label for="d-bpm">BPM</label><input id="d-bpm" type="number" inputmode="numeric" min="30" max="300" placeholder="96" value="' + esc(d.bpm) + '"></div>' +
+          '<div class="field"><label for="d-key">Key</label><div class="row" style="flex-wrap:nowrap"><select id="d-key">' + keyOpts + '</select><select id="d-mode" aria-label="Major or minor"><option' + (d.mode === 'major' ? ' selected' : '') + '>major</option><option' + (d.mode === 'minor' ? ' selected' : '') + '>minor</option></select></div></div>' +
+          '<div class="field"><label for="d-genre">Genre</label><select id="d-genre">' + genreOpts + '</select></div>' +
+        '</div>' +
+        '<div class="field"><span class="label-text">Mood</span><div class="chips">' + MOODS.map(function (m) { return chip(m, d.mood === m, 'data-mood="' + m + '"'); }).join('') + '</div></div>' +
+      '</div>' +
+      '<div class="panel"><div class="field"><span class="label-text">What does it need?</span><p class="hint">Musicians who play these see your project in their feed.</p><div class="chips">' + all.map(function (s) { return chip(s, d.needs.indexOf(s) >= 0, 'data-need="' + s + '"'); }).join('') + '</div>' + (state.needsError ? '<p class="error">Pick at least one part it needs.</p>' : '') + '</div>' +
+        '<div class="field"><label for="d-note">Note to contributors <span class="muted">(optional)</span></label><textarea id="d-note" placeholder="What you’re hearing for it, what to leave alone">' + esc(d.note) + '</textarea></div></div>' +
+      '<div class="row" style="justify-content:space-between"><a class="btn link" href="#new-upload">← Back</a><button type="button" class="btn primary" id="to-review">Review</button></div></div>';
+  };
+
+  screens['new-review'] = function () {
+    var d = state.draft;
+    if (!d || !d.file || !d.title) return screens['new-details']();
+    var p = draftAsProject(d);
+    return '<div class="narrow">' + steps(3, 3) +
+      '<div class="stack"><h1>Check and publish</h1><p class="muted">This is how your project appears in other musicians’ feeds.</p></div>' +
+      card(p).replace('<button type="button" class="card"', '<div class="card" style="cursor:default"').replace(/<\/button>$/, '</div>') +
+      '<p class="muted">It goes to musicians who play <strong>' + esc(d.needs.join(' or ')) + '</strong>.</p>' +
+      '<div class="row" style="justify-content:space-between"><a class="btn link" href="#new-details">← Edit</a><button type="button" class="btn primary" id="publish">Publish project</button></div></div>';
+  };
+
+  function draftAsProject(d) {
+    return { id: 'draft', title: d.title, owner: state.user.name, age: 'just now', bpm: d.bpm ? Number(d.bpm) : null, key: d.key ? d.key + ' ' + d.mode : null, genre: d.genre || null, mood: d.mood || null, needs: d.needs.slice(), length: 108, note: d.note, versions: [{ v: 1, what: 'Original track', who: state.user.name, when: 'just now' }] };
+  }
+
+  // ---------- routing ----------
+  var ONBOARD = { welcome: 1, signup: 1, skills: 1 };
+  function route() {
+    var h = (location.hash || '#welcome').slice(1);
+    var m = h.match(/^(project|contribute|sent)-(.+)$/);
+    return m ? { name: m[1], arg: m[2] } : { name: screens[h] ? h : 'welcome', arg: null };
+  }
+  function render() {
+    stopPlayback();
+    var r = route();
+    if (!state.user && !ONBOARD[r.name]) { location.replace('#welcome'); return; }
+    if (r.name === 'skills' && !state.user) { location.replace('#signup'); return; }
+    var bar = document.getElementById('bar');
+    bar.hidden = !!ONBOARD[r.name] && !(r.name === 'skills' && !state.onboarding);
+    if (state.user) document.getElementById('avatar').textContent = initials(state.user.name);
+    document.querySelectorAll('[data-nav]').forEach(function (a) {
+      var on = (a.dataset.nav === 'feed' && (r.name === 'feed' || r.name === 'project' || r.name === 'contribute' || r.name === 'sent')) || (a.dataset.nav === 'new' && r.name.indexOf('new-') === 0);
+      if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    app.innerHTML = screens[r.name](r.arg);
+    requestAnimationFrame(drawAllWaves);
+    var where = location.hash;
+    if (where !== lastHash) {
+      lastHash = where;
+      window.scrollTo(0, 0);
+      var h1 = app.querySelector('h1'); if (h1) { h1.tabIndex = -1; h1.focus({ preventScroll: true }); }
+    }
+  }
+  var lastHash = null;
+  window.addEventListener('hashchange', render);
+
+  // ---------- fake file picks ----------
+  function fakeFile(base) { return { name: base, ext: 'WAV', length: '1:48', size: '9.4 MB' }; }
+
+  // ---------- events ----------
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('button, a');
+    if (!t) return;
+    var d = t.dataset;
+    if (d.soon) { e.preventDefault(); soon(d.soon); return; }
+    if (d.task) { e.preventDefault(); startTask(d.task); return; }
+    if (t.id === 'tasks-btn') { var panel = document.getElementById('tasks'); panel.hidden = !panel.hidden; t.setAttribute('aria-expanded', String(!panel.hidden)); return; }
+    if (d.skill) {
+      var s = state.user.skills, i = s.indexOf(d.skill);
+      if (i >= 0) s.splice(i, 1); else s.push(d.skill);
+      t.setAttribute('aria-pressed', String(i < 0));
+      document.getElementById('skill-count').textContent = s.length ? s.length + ' selected' : 'Pick at least one';
+      document.getElementById('skills-done').disabled = !s.length;
+      return;
+    }
+    if (t.id === 'skills-done') {
+      var welcome = state.onboarding;
+      state.onboarding = false;
+      go('feed');
+      toast(welcome ? 'Welcome, ' + firstName(state.user.name) + '. Here are projects that need ' + state.user.skills.join(', ') + '.' : 'Skills saved. Your feed is updated.');
+      return;
+    }
+    if (d.genre) { state.genre = d.genre; render(); return; }
+    if (d.open) { go('project-' + d.open); return; }
+    if (t.id === 'play') { togglePlay(byId(route().arg)); return; }
+    if (d.download) { toast('Downloading ' + d.download + ' (in the prototype, no file is saved).'); return; }
+    if (d.pickContrib !== undefined) { var p = byId(state.contrib.id); state.contrib.file = { name: p.id + '-v' + p.versions[0].v + '-' + initials(state.user.name).toLowerCase() + '.wav', ext: 'WAV', length: mmss(p.length), size: '18.2 MB' }; render(); return; }
+    if (d.clearContrib !== undefined) { state.contrib.file = null; render(); return; }
+    if (d.part) { var parts = state.contrib.parts, j = parts.indexOf(d.part); if (j >= 0) parts.splice(j, 1); else parts.push(d.part); render(); return; }
+    if (t.id === 'send') { var cp = byId(state.contrib.id); state.contrib = null; go('sent-' + cp.id); return; }
+    if (d.pickDraft !== undefined) { state.draft.file = fakeFile('night-shift-loop.wav'); render(); return; }
+    if (d.clearDraft !== undefined) { state.draft.file = null; render(); return; }
+    if (t.id === 'to-details') { go('new-details'); return; }
+    if (d.mood) { saveDetails(); state.draft.mood = state.draft.mood === d.mood ? '' : d.mood; render(); return; }
+    if (d.need) { saveDetails(); var n = state.draft.needs, k = n.indexOf(d.need); if (k >= 0) n.splice(k, 1); else n.push(d.need); state.needsError = false; render(); return; }
+    if (t.id === 'to-review') {
+      saveDetails();
+      state.titleError = !state.draft.title.trim(); state.needsError = !state.draft.needs.length;
+      if (state.titleError || state.needsError) { render(); toast('Add a title and at least one part it needs.'); return; }
+      go('new-review'); return;
+    }
+    if (t.id === 'publish') {
+      var np = draftAsProject(state.draft); np.id = slug(state.draft.title); np.mine = true;
+      state.projects.unshift(np); state.draft = null;
+      go('project-' + np.id);
+      toast('Published. ' + np.title + ' now shows in the feed of musicians who play ' + np.needs.join(' or ') + '.');
+      return;
+    }
+  });
+
+  document.addEventListener('input', function (e) {
+    if (e.target.id === 'c-note' && state.contrib) state.contrib.note = e.target.value;
+    if (e.target.id === 'd-title') state.titleError = false;
+  });
+
+  function saveDetails() {
+    var d = state.draft; if (!d) return;
+    var v = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+    if (document.getElementById('d-title')) { d.title = v('d-title'); d.bpm = v('d-bpm'); d.key = v('d-key'); d.mode = v('d-mode'); d.genre = v('d-genre'); d.note = v('d-note'); }
+  }
+
+  document.addEventListener('submit', function (e) {
+    if (e.target.id !== 'signup-form') return;
+    e.preventDefault();
+    var el = e.target.elements, vals = { name: el.namedItem('name').value.trim(), email: el.namedItem('email').value.trim(), password: el.namedItem('password').value };
+    var errs = {};
+    if (!vals.name) errs.name = 'Enter your name.';
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(vals.email)) errs.email = 'Enter an email address like you@example.com.';
+    if (vals.password.length < 8) errs.password = 'Use at least 8 characters.';
+    state.signupErrors = errs; state.signupValues = { name: vals.name, email: vals.email };
+    if (Object.keys(errs).length) { render(); var first = app.querySelector('[aria-invalid="true"]'); if (first) first.focus(); return; }
+    state.user = { name: vals.name, email: vals.email, skills: [] };
+    state.onboarding = true; state.signupErrors = {}; state.signupValues = null;
+    go('skills');
+  });
+
+  function startTask(n) {
+    document.getElementById('tasks').hidden = true;
+    document.getElementById('tasks-btn').setAttribute('aria-expanded', 'false');
+    if (n === '1') { resetState(false); go('welcome'); }
+    else if (n === '2') { resetState(true); go('new-upload'); }
+    else { resetState(true); go('feed'); }
+  }
+
+  render();
+})();
+</script>
+<!-- page:body-end -->
+</body>
+</html>
