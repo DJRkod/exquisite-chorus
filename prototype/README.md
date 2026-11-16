@@ -40,6 +40,12 @@ The demo content is a first draft of the skill and tag lists in `shared/`.
 
 The people and projects are made up.
 
+## Look
+
+- **Colors:** Illinois Blue (#13294B) for the top bar and text, and Illinois Orange (#FF5F05) for the main action on each screen. Orange buttons use blue text, because white text on that orange fails the contrast check.
+- **Fonts (Google Fonts):** Bricolage Grotesque for headings, Instrument Sans for body text, DM Mono for data such as "92 BPM · G major". None of them has ♯ or ♭, so those two signs come from a system symbol font.
+- **Icons:** from the Noun Project, licensed CC BY 3.0, which requires crediting each creator. The instrument icons are by Eucalyp, and the play, pause and check icons are by Meko. The page shows the credits under "Icon credits" at the bottom, and [`icons/credits.json`](icons/credits.json) lists each icon's link. The PNGs in `icons/` are 128px copies of the Noun Project previews, and the page embeds them so it still works as a single file. No image or sound in the prototype is AI-generated.
+
 ## Changing it
 
 The page is plain HTML, CSS, and JavaScript with no build step. The demo content is at the top of the script (`seedProjects`), and each screen is a function in `screens`. Check the change by clicking through all three tasks.
