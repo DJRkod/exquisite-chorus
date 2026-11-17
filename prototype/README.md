@@ -10,7 +10,7 @@ A click-through mockup of three key interactions, used for the heuristic evaluat
 2. **Start a project:** upload a track, add tags (BPM, key, genre, mood), choose what it needs, review, publish.
 3. **Contribute:** feed matched to your skills with genre filters, project page with player and version history, download the current mix, upload your amended mix.
 
-The **Prototype tasks** button (bottom right) resets the prototype and jumps to the start of any task. If you open the feed directly, you are signed in as Riley Chen, who plays bass and sings.
+The **Prototype tasks** button (bottom right on larger screens, above the page content on smaller screens) resets the prototype and jumps to the start of any task. If you open the feed directly, you are signed in as Riley Chen, who plays bass and sings.
 
 ## What is simulated
 
