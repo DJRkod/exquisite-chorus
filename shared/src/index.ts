@@ -17,3 +17,14 @@ export type {
   RecordingDto,
   RecordingStatus,
 } from './recordings.js'
+export type {
+  ContributionDto,
+  CreateContributionRequest,
+  CreateProjectRequest,
+  ProjectDto,
+  ProjectStatus,
+} from './projects.js'
+// The vocabulary's runtime lists (SKILLS, GENRES, ...) are NOT re-exported
+// here: the root entry stays types-only. Import values from
+// '@exquisite-chorus/shared/vocabulary' instead.
+export type { Genre, Mood, MusicalKey, Skill } from './vocabulary.js'

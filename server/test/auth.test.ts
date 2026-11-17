@@ -56,6 +56,7 @@ describe('POST /api/auth/signup', () => {
       id: expect.any(String),
       email: 'alice@example.com',
       displayName: 'Alice',
+      skills: [],
     })
     expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|__v|_id/)
 

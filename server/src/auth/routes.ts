@@ -1,5 +1,6 @@
 // /api/auth: sign up, sign in, sign out, and the current user.
-import type { PublicUser, SignInRequest, SignUpRequest } from '@exquisite-chorus/shared'
+import type { PublicUser, SignInRequest, SignUpRequest, Skill } from '@exquisite-chorus/shared'
+import { SKILLS } from '@exquisite-chorus/shared/vocabulary'
 import bcrypt from 'bcryptjs'
 import { Router, type Request, type Response } from 'express'
 import { ipKeyGenerator, rateLimit, type Options } from 'express-rate-limit'
@@ -28,11 +29,26 @@ function normalizeEmail(raw: unknown): string | undefined {
   return typeof raw === 'string' ? raw.trim().toLowerCase() : undefined
 }
 
+function parseSkills(raw: unknown): Skill[] | undefined {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw)) throw new HttpError(400, 'Skills must be a list from the skill picker')
+  const known = SKILLS as readonly string[]
+  const skills = new Set<string>()
+  for (const item of raw) {
+    if (typeof item !== 'string' || !known.includes(item)) {
+      throw new HttpError(400, 'Skills must be chosen from the list of instruments and studio skills')
+    }
+    skills.add(item)
+  }
+  return [...skills] as Skill[]
+}
+
 function parseSignUp(body: unknown): SignUpRequest {
   const email = normalizeEmail(field(body, 'email'))
   const password = field(body, 'password')
   const rawName = field(body, 'displayName')
   const displayName = typeof rawName === 'string' ? rawName.trim() : ''
+  const skills = parseSkills(field(body, 'skills'))
 
   if (!email || email.length > EMAIL_MAX || !EMAIL_SHAPE.test(email)) {
     throw new HttpError(400, 'Enter a valid email address')
@@ -43,7 +59,7 @@ function parseSignUp(body: unknown): SignUpRequest {
   if (displayName.length === 0 || displayName.length > DISPLAY_NAME_MAX) {
     throw new HttpError(400, `Display name must be 1 to ${DISPLAY_NAME_MAX} characters`)
   }
-  return { email, password, displayName }
+  return { email, password, displayName, ...(skills === undefined ? {} : { skills }) }
 }
 
 function parseSignIn(body: unknown): SignInRequest {
@@ -104,7 +120,12 @@ export function authRouter(config: Config, options: AuthRouterOptions = {}): Rou
     const passwordHash = await bcrypt.hash(input.password, rounds)
     let user
     try {
-      user = await User.create({ email: input.email, displayName: input.displayName, passwordHash })
+      user = await User.create({
+        email: input.email,
+        displayName: input.displayName,
+        passwordHash,
+        ...(input.skills === undefined ? {} : { skills: input.skills }),
+      })
     } catch (err) {
       if (isRecord(err) && err.code === 11000) {
         throw new HttpError(409, 'An account with that email already exists')

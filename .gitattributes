@@ -3,3 +3,5 @@
 
 # The exporter writes this file itself; keep Git from rewriting its line endings.
 llm_logs_raburt3.csv -text
+# Written manually as CSV; same protection.
+llm_logs_zsuarez2.csv -text
