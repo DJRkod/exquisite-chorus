@@ -18,6 +18,7 @@
   --ink: #13294b;
   --muted: #536079;
   --line: #d5dbe7;
+  --control-line: #7d8ba3;
   --accent: #ff5f05;
   --accent-ink: #13294b;
   --accent-text: #b83d00;
@@ -37,13 +38,13 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0b1527; --surface: #13213a; --sunken: #0f1b31; --ink: #e9eef7; --muted: #9faac2; --line: #263858;
+    --bg: #0b1527; --surface: #13213a; --sunken: #0f1b31; --ink: #e9eef7; --muted: #9faac2; --line: #263858; --control-line: #7183a2;
     --accent: #ff7a33; --accent-ink: #13294b; --accent-text: #ff8f52; --bar: #0f1f3a; --bar-ink: #ffffff; --bar-muted: #b4c0d8;
     --match: #c4d5f5; --match-bg: #1d3358; --error: #ff7070; --wave: #34476b; --wave-on: #e9eef7; --focus: #ff8f52; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0b1527; --surface: #13213a; --sunken: #0f1b31; --ink: #e9eef7; --muted: #9faac2; --line: #263858;
+  --bg: #0b1527; --surface: #13213a; --sunken: #0f1b31; --ink: #e9eef7; --muted: #9faac2; --line: #263858; --control-line: #7183a2;
   --accent: #ff7a33; --accent-ink: #13294b; --accent-text: #ff8f52; --bar: #0f1f3a; --bar-ink: #ffffff; --bar-muted: #b4c0d8;
   --match: #c4d5f5; --match-bg: #1d3358; --error: #ff7070; --wave: #34476b; --wave-on: #e9eef7; --focus: #ff8f52; color-scheme: dark;
 }
@@ -70,7 +71,7 @@ body {
   font: 15px/1.55 var(--font-body);
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 0 96px;
+  padding-block: 0 64px;
 }
 h1, h2, h3 { font-family: var(--font-display); line-height: 1.15; margin: 0; text-wrap: balance; }
 h1 { font-size: clamp(1.8rem, 4.2vw, 2.5rem); font-weight: 800; letter-spacing: -0.01em; }
@@ -101,11 +102,19 @@ main .logo-dot { box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--accent); }
 .nav a, .nav button { padding: 6px 10px; border-radius: 8px; text-decoration: none; border: 0; background: none; cursor: pointer; color: var(--bar-muted); font-weight: 500; }
 .nav a[aria-current="page"] { color: var(--bar-ink); box-shadow: inset 0 -2px 0 var(--accent); border-radius: 0; }
 .nav a:hover, .nav button:hover { color: var(--bar-ink); }
-.avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-size: 0.8rem; font-weight: 600; border: 0; cursor: pointer; }
+.avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-size: 0.8rem; font-weight: 600; border: 0; cursor: pointer; }
 
-main { max-width: 880px; margin: 0 auto; padding-top: 28px; display: grid; gap: 24px; }
-.narrow { max-width: 520px; width: 100%; margin: 0 auto; display: grid; gap: 20px; }
-.stack { display: grid; gap: 12px; }
+@media (max-width: 560px) {
+  .bar-inner { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
+  .logo { grid-area: 1 / 1; }
+  .avatar { grid-area: 1 / 2; }
+  .nav { grid-area: 2 / 1 / 3 / -1; margin-left: 0; }
+  .nav a, .nav button { padding-inline: 8px; }
+}
+
+main { overflow-wrap: anywhere; max-width: 880px; margin: 0 auto; padding-top: 28px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.narrow { max-width: 520px; width: 100%; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 16px; min-width: 0; }
 
@@ -121,7 +130,7 @@ main { max-width: 880px; margin: 0 auto; padding-top: 28px; display: grid; gap: 
 /* form */
 .field { display: grid; gap: 6px; }
 .field label, .field .label-text { font-weight: 600; font-size: 0.9rem; }
-.field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--control-line); border-radius: 8px; background: var(--surface); }
 .field textarea { min-height: 84px; resize: vertical; }
 .hint { font-size: 0.82rem; color: var(--muted); }
 .error { font-size: 0.82rem; color: var(--error); font-weight: 500; }
@@ -145,7 +154,7 @@ main { max-width: 880px; margin: 0 auto; padding-top: 28px; display: grid; gap: 
 
 /* cards */
 .cards { display: grid; gap: 12px; }
-.card { display: grid; grid-template-columns: 1fr; gap: 10px; text-align: left; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; cursor: pointer; }
+.card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; text-align: left; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; cursor: pointer; }
 .card:hover { border-color: var(--ink); }
 .card-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
 .card.other { opacity: 0.85; }
@@ -159,7 +168,7 @@ canvas.wave.big { height: 84px; cursor: pointer; }
 .time { display: flex; justify-content: space-between; margin-top: 4px; }
 
 /* dropzone */
-.drop { border: 2px dashed var(--line); border-radius: var(--radius); padding: 28px 16px; text-align: center; background: var(--sunken); cursor: pointer; display: grid; gap: 6px; justify-items: center; width: 100%; }
+.drop { border: 2px dashed var(--control-line); border-radius: var(--radius); padding: 28px 16px; text-align: center; background: var(--sunken); cursor: pointer; display: grid; gap: 6px; justify-items: center; width: 100%; }
 .drop:hover { border-color: var(--ink); }
 .file { display: flex; gap: 12px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; background: var(--surface); flex-wrap: wrap; }
 .file-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--ink); color: var(--surface); display: grid; place-items: center; font-weight: 700; font-size: 0.7rem; font-family: var(--font-data); }
@@ -179,16 +188,24 @@ canvas.wave.big { height: 84px; cursor: pointer; }
 .instruments .ico { width: 34px; height: 34px; }
 .instruments .ico:nth-child(3n+2) { color: var(--accent); }
 .credits { max-width: 880px; margin: 48px auto 0; font-size: 0.8rem; color: var(--muted); }
+.credits.narrow-credits { max-width: 520px; }
 .credits summary { cursor: pointer; width: fit-content; }
 .credits ul { margin: 8px 0 0; padding-left: 18px; columns: 2 220px; }
 .credits a { color: inherit; }
 .split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-@media (max-width: 720px) { .split { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .split { grid-template-columns: minmax(0, 1fr); } }
 
 /* toast + tasks */
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 10px; max-width: min(92vw, 460px); z-index: 20; font-size: 0.9rem; }
-.tasks-btn { position: fixed; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 15; border-radius: 999px; padding: 8px 14px; border: 1px dashed var(--muted); background: var(--surface); cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--muted); }
-.tasks { position: fixed; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(60px + env(safe-area-inset-bottom, 0px)); z-index: 15; width: min(340px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 10px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.18); }
+.toast { overflow-wrap: anywhere; pointer-events: none; position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 10px; max-width: min(92vw, 460px); z-index: 20; font-size: 0.9rem; }
+.tasks-tools { max-width: 880px; margin: 12px auto 0; display: grid; justify-items: end; gap: 8px; }
+.tasks-btn { border-radius: 999px; padding: 8px 14px; border: 1px dashed var(--muted); background: var(--surface); cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+.tasks { width: min(340px, 100%); max-height: min(320px, 60vh); overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 10px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.18); }
+/* Keep the evaluation shortcut off the main content at narrower or shorter sizes. */
+@media (min-width: 1200px) and (min-height: 460px) {
+  .tasks-tools { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); z-index: 15; width: 340px; margin: 0; pointer-events: none; }
+  .tasks-btn, .tasks { pointer-events: auto; }
+  .tasks { grid-row: 1; }
+}
 .tasks ol { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
 @media (prefers-reduced-motion: no-preference) { .toast { animation: rise 0.18s ease-out; } }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } }
@@ -208,7 +225,7 @@ canvas.wave.big { height: 84px; cursor: pointer; }
     <button type="button" class="avatar" id="avatar" data-soon="Your profile" aria-label="Your profile">RC</button>
   </div>
 </header>
-<main id="app" aria-live="polite"></main>
+<div class="tasks-tools">
 <button type="button" class="tasks-btn" id="tasks-btn" aria-expanded="false" aria-controls="tasks">Prototype tasks</button>
 <div class="tasks" id="tasks" hidden>
   <p class="label">For the heuristic evaluation</p>
@@ -219,6 +236,8 @@ canvas.wave.big { height: 84px; cursor: pointer; }
   </ol>
   <p class="hint">Each link resets the prototype and opens that task's first screen. Nothing here is saved, and no audio plays.</p>
 </div>
+</div>
+<main id="app" aria-live="polite"></main>
 <footer class="credits"><details><summary>Icon credits</summary><p>Icons from the <a href="https://thenounproject.com/" target="_blank" rel="noopener">Noun Project</a>, licensed <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>. Instruments by Eucalyp; play, pause and check by Meko.</p><ul><li><a href="https://thenounproject.com/icon/microphone-2610161/" target="_blank" rel="noopener">Microphone</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/acoustic-3089124/" target="_blank" rel="noopener">Acoustic</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/bass-guitar-2266767/" target="_blank" rel="noopener">Bass Guitar</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/drum-kit-2266769/" target="_blank" rel="noopener">drum kit</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/keyboard-3089130/" target="_blank" rel="noopener">Keyboard</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/synthesizer-4521879/" target="_blank" rel="noopener">Synthesizer</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/violin-3089144/" target="_blank" rel="noopener">Violin</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/trumpet-3089143/" target="_blank" rel="noopener">Trumpet</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/headphone-2610166/" target="_blank" rel="noopener">Headphone</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/mixer-control-3158979/" target="_blank" rel="noopener">mixer control</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/compose-song-5167795/" target="_blank" rel="noopener">compose song</a> by Eucalyp</li><li><a href="https://thenounproject.com/icon/play-button-8110169/" target="_blank" rel="noopener">play button</a> by Meko</li><li><a href="https://thenounproject.com/icon/pause-8110151/" target="_blank" rel="noopener">pause</a> by Meko</li><li><a href="https://thenounproject.com/icon/check-mark-8139582/" target="_blank" rel="noopener">Check Mark</a> by Meko</li></ul></details></footer>
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -446,8 +465,7 @@ canvas.wave.big { height: 84px; cursor: pointer; }
     var c = state.contrib && state.contrib.id === id ? state.contrib : (state.contrib = { id: id, file: null, parts: p.needs.filter(function (n) { return state.user.skills.indexOf(n) >= 0; }), note: '' });
     var options = p.needs.concat(state.user.skills.filter(function (s) { return p.needs.indexOf(s) < 0; }));
     var ready = c.file && c.parts.length;
-    return '<div><a class="btn link" href="#project-' + p.id + '">← ' + esc(p.title) + '</a></div>' +
-      '<div class="narrow">' +
+    return '<div class="narrow"><div><a class="btn link" href="#project-' + p.id + '">← ' + esc(p.title) + '</a></div>' +
       '<div class="stack"><h1>Upload your mix</h1><p class="muted">Upload the whole song with your part added, not just your part on its own. ' + esc(firstName(p.owner)) + ' hears it next to the current version (v' + p.versions[0].v + ').</p></div>' +
       '<div class="panel"><div class="field"><span class="label-text">Your mix</span>' +
         (c.file ? fileRow(c.file, 'data-clear-contrib') : '<button type="button" class="drop" data-pick-contrib><strong>Choose an audio file</strong><span class="hint">WAV, MP3 or M4A, up to 20 MB</span></button>') +
@@ -485,7 +503,7 @@ canvas.wave.big { height: 84px; cursor: pointer; }
     return '<div class="narrow">' + steps(2, 3) +
       '<div class="stack"><h1>Describe it</h1><p class="muted">Only the title and what it needs are required. Tags help the right people find it.</p></div>' +
       '<div class="panel">' +
-        '<div class="field' + (state.titleError ? ' invalid' : '') + '"><label for="d-title">Title</label><input id="d-title" value="' + esc(d.title) + '" placeholder="Night Shift"' + (state.titleError ? ' aria-invalid="true"' : '') + '>' + (state.titleError ? '<p class="error">Give your project a title.</p>' : '') + '</div>' +
+        '<div class="field' + (state.titleError ? ' invalid' : '') + '"><label for="d-title">Title</label><input id="d-title" value="' + esc(d.title) + '" placeholder="Night Shift"' + (state.titleError ? ' aria-invalid="true" aria-describedby="d-title-error"' : '') + '>' + (state.titleError ? '<p class="error" id="d-title-error">Give your project a title.</p>' : '') + '</div>' +
         '<div class="grid2">' +
           '<div class="field"><label for="d-bpm">BPM</label><input id="d-bpm" type="number" inputmode="numeric" min="30" max="300" placeholder="96" value="' + esc(d.bpm) + '"></div>' +
           '<div class="field"><label for="d-key">Key</label><div class="row" style="flex-wrap:nowrap"><select id="d-key">' + keyOpts + '</select><select id="d-mode" aria-label="Major or minor"><option' + (d.mode === 'major' ? ' selected' : '') + '>major</option><option' + (d.mode === 'minor' ? ' selected' : '') + '>minor</option></select></div></div>' +
@@ -493,7 +511,7 @@ canvas.wave.big { height: 84px; cursor: pointer; }
         '</div>' +
         '<div class="field"><span class="label-text">Mood</span><div class="chips">' + MOODS.map(function (m) { return chip(m, d.mood === m, 'data-mood="' + m + '"'); }).join('') + '</div></div>' +
       '</div>' +
-      '<div class="panel"><div class="field"><span class="label-text">What does it need?</span><p class="hint">Musicians who play these see your project in their feed.</p><div class="chips">' + all.map(function (s) { return chip(s, d.needs.indexOf(s) >= 0, 'data-need="' + s + '"'); }).join('') + '</div>' + (state.needsError ? '<p class="error">Pick at least one part it needs.</p>' : '') + '</div>' +
+      '<div class="panel"><div class="field" id="d-needs" role="group" aria-labelledby="d-needs-label"' + (state.needsError ? ' tabindex="-1" aria-describedby="d-needs-error"' : '') + '><span class="label-text" id="d-needs-label">What does it need?</span><p class="hint">Musicians who play these see your project in their feed.</p><div class="chips">' + all.map(function (s) { return chip(s, d.needs.indexOf(s) >= 0, 'data-need="' + s + '"'); }).join('') + '</div>' + (state.needsError ? '<p class="error" id="d-needs-error">Pick at least one part it needs.</p>' : '') + '</div>' +
         '<div class="field"><label for="d-note">Note to contributors <span class="muted">(optional)</span></label><textarea id="d-note" placeholder="What you’re hearing for it, what to leave alone">' + esc(d.note) + '</textarea></div></div>' +
       '<div class="row" style="justify-content:space-between"><a class="btn link" href="#new-upload">← Back</a><button type="button" class="btn primary" id="to-review">Review</button></div></div>';
   };
@@ -533,6 +551,7 @@ canvas.wave.big { height: 84px; cursor: pointer; }
       if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
     app.innerHTML = screens[r.name](r.arg);
+    document.querySelector('.credits').classList.toggle('narrow-credits', !!app.querySelector(':scope > .narrow'));
     requestAnimationFrame(drawAllWaves);
     var where = location.hash;
     if (where !== lastHash) {
@@ -586,7 +605,16 @@ canvas.wave.big { height: 84px; cursor: pointer; }
     if (t.id === 'to-review') {
       saveDetails();
       state.titleError = !state.draft.title.trim(); state.needsError = !state.draft.needs.length;
-      if (state.titleError || state.needsError) { render(); toast('Add a title and at least one part it needs.'); return; }
+      if (state.titleError || state.needsError) {
+        render();
+        var invalid = document.getElementById(state.titleError ? 'd-title' : 'd-needs');
+        var bar = document.getElementById('bar');
+        var headerBottom = bar.getBoundingClientRect().bottom;
+        invalid.focus({ preventScroll: true });
+        var fieldTop = invalid.closest('.field').getBoundingClientRect().top;
+        window.scrollBy(0, fieldTop - headerBottom - 12);
+        return;
+      }
       go('new-review'); return;
     }
     if (t.id === 'publish') {
