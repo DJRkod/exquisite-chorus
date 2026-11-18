@@ -52,7 +52,12 @@ npm test               # vitest in client and server
 npm run lint           # oxlint
 npm run typecheck      # tsc in every workspace
 npm run build          # client bundle + server compile
+npm run seed -- --in-memory   # demo data (prototype content) in a throwaway database
 ```
+
+`npm run seed` without `--in-memory` seeds the database in `MONGODB_URI`. Demo data:
+the prototype's people and projects; sign in as `riley@example.com` with
+`chorus-demo-2026` (see `server/src/models/seed.ts`).
 
 Deployment and cloud setup (AWS S3 + budget alert, MongoDB Atlas, Render): see [docs/setup.md](docs/setup.md).
 

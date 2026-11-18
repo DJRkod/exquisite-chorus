@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Router } from 'express'
+import session from 'express-session'
 import mongoose from 'mongoose'
 import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -78,7 +79,13 @@ describe('loadConfig', () => {
 })
 
 describe('createApp API', () => {
-  const app = createApp(testConfig, { clientDist: null, apiRouters: [throwingRouter()] })
+  // These tests exercise routing/error handling, not Mongo-backed sessions.
+  // Avoid creating unused MongoStore indexes while the in-memory DB shuts down.
+  const app = createApp(testConfig, {
+    clientDist: null,
+    apiRouters: [throwingRouter()],
+    sessionStore: new session.MemoryStore(),
+  })
 
   it('GET /api/health returns the envelope with db state', async () => {
     const res = await request(app).get('/api/health')
@@ -123,6 +130,7 @@ describe('createApp API', () => {
   it('sets helmet headers with the S3 origin in media-src and connect-src', async () => {
     const s3App = createApp(loadConfig({ ...productionEnv, NODE_ENV: 'test' }), {
       clientDist: null,
+      sessionStore: new session.MemoryStore(),
     })
     const res = await request(s3App).get('/api/health')
     expect(res.headers['x-content-type-options']).toBe('nosniff')
@@ -149,7 +157,7 @@ describe('createApp SPA hosting', () => {
   })
 
   it('serves index.html for a client-side route', async () => {
-    const app = createApp(testConfig, { clientDist: dist })
+    const app = createApp(testConfig, { clientDist: dist, sessionStore: new session.MemoryStore() })
     const res = await request(app).get('/some/client/route')
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/text\/html/)
@@ -157,14 +165,14 @@ describe('createApp SPA hosting', () => {
   })
 
   it('still returns the 404 envelope for unknown /api paths', async () => {
-    const app = createApp(testConfig, { clientDist: dist })
+    const app = createApp(testConfig, { clientDist: dist, sessionStore: new session.MemoryStore() })
     const res = await request(app).get('/api/nope')
     expect(res.status).toBe(404)
     expect(res.body).toEqual({ message: 'Endpoint not found', data: null })
   })
 
   it('skips static hosting when the client build is missing', async () => {
-    const app = createApp(testConfig, { clientDist: path.join(dist, 'does-not-exist') })
+    const app = createApp(testConfig, { clientDist: path.join(dist, 'does-not-exist'), sessionStore: new session.MemoryStore() })
     const res = await request(app).get('/some/client/route')
     expect(res.status).toBe(404)
   })
