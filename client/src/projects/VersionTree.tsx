@@ -3,7 +3,7 @@
 // floats beside the tree (wide screens) or sits under it (narrow ones).
 // Keyboard: the tree is one tab stop; arrows move between dots.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
-import { firstName, timeAgo, versionLabel, who } from './format.ts'
+import { approvedLabel, firstName, timeAgo, versionLabel, who } from './format.ts'
 import type { TreeLayout } from './treeLayout.ts'
 import type { VersionNode } from './types.ts'
 import type { VersionTree as Tree } from './versionTree.ts'
@@ -205,7 +205,7 @@ export default function VersionTree({ tree, layout, open, lineage, ownerName, on
                 {popNode.skillsAdded?.length ? <span>+ {popNode.skillsAdded.join(', ')}</span> : null}
                 {popNode.note && <span className="vt-pop-note">{popNode.note}</span>}
                 {popNode.approved && (
-                  <span className="badge">Approved{ownerName ? ` by ${firstName(ownerName)}` : ''}</span>
+                  <span className="badge">{approvedLabel(ownerName)}</span>
                 )}
               </div>
             )}

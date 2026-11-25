@@ -22,6 +22,10 @@ export const who = (node: VersionNode) => node.contributorDisplayName ?? 'Someon
 
 export const firstName = (name: string) => name.split(' ')[0]
 
+/** "Approved by Maya", or just "Approved" when the owner's name is unknown. */
+export const approvedLabel = (ownerName: string | null) =>
+  ownerName ? `Approved by ${firstName(ownerName)}` : 'Approved'
+
 /** The dot's accessible name, e.g. "v3 by Jordan Hale, adds Drums, approved". */
 export function versionLabel(node: VersionNode, isRoot: boolean): string {
   const parts = [`v${node.version} by ${who(node)}`]

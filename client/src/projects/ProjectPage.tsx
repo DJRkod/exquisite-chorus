@@ -82,6 +82,7 @@ export default function ProjectPage({ source }: { source: ProjectSource }) {
   const fallback = load.status === 'ready' ? load.defaultV : null
   const open = tree.get(asked) ? asked : fallback !== null && tree.get(fallback) ? fallback : (tree.root?.version ?? null)
   const openNode = open !== null ? tree.get(open)! : null
+  const openPath = useMemo(() => (open === null ? [] : lineage(tree, open)), [tree, open])
 
   if (load.status === 'loading') return <Shell source={source}><p role="status">Loading project…</p></Shell>
   if (load.status === 'notFound')
@@ -255,8 +256,8 @@ export default function ProjectPage({ source }: { source: ProjectSource }) {
         <VersionTree
           tree={tree}
           layout={layout}
-          open={open}
-          lineage={lineage(tree, open)}
+          open={openNode.version}
+          lineage={openPath}
           ownerName={ownerName}
           onSelect={select}
           wide={wide}

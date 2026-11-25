@@ -1,5 +1,5 @@
 import { forwardRef } from 'react'
-import { firstName, timeAgo, who } from './format.ts'
+import { approvedLabel, timeAgo, who } from './format.ts'
 import type { VersionNode } from './types.ts'
 
 export type PlayState = 'idle' | 'loading' | 'playing'
@@ -46,7 +46,7 @@ const VersionCard = forwardRef<HTMLElement, VersionCardProps>(function VersionCa
         <span className="vc-num">{v}</span>
         {isRoot && <span className="badge start">Original</span>}
         {node.approved && (
-          <span className="badge">Approved{ownerName ? ` by ${firstName(ownerName)}` : ''}</span>
+          <span className="badge">{approvedLabel(ownerName)}</span>
         )}
       </div>
       <h3>

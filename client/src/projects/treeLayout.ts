@@ -4,7 +4,7 @@
 // node's largest branch is kept in the middle so the tree grows a trunk.
 // Pure math with fixed sizes, so it needs no DOM measurement.
 import type { VersionNode } from './types.ts'
-import { descendantCount, type VersionTree } from './versionTree.ts'
+import type { VersionTree } from './versionTree.ts'
 
 /** Smallest tap area per dot; slots are wider, so neighbours never overlap. */
 export const HIT = 44
@@ -24,7 +24,6 @@ export interface Point {
 }
 
 export interface Edge {
-  from: number
   to: number
   /** SVG path data for the branch. */
   d: string
@@ -47,8 +46,8 @@ export interface TreeLayout {
 export const branchWidth = (count: number) => 2 + 2.3 * Math.sqrt(count + 1)
 
 /** Children reordered so the biggest branch sits in the middle. */
-function trunkOrder(tree: VersionTree, kids: VersionNode[]): VersionNode[] {
-  const bySize = [...kids].sort((a, b) => descendantCount(tree, b.version) - descendantCount(tree, a.version))
+function trunkOrder(kids: VersionNode[], size: Map<number, number>): VersionNode[] {
+  const bySize = [...kids].sort((a, b) => size.get(b.version)! - size.get(a.version)!)
   const out: VersionNode[] = []
   bySize.forEach((k, i) => (i % 2 ? out.unshift(k) : out.push(k)))
   return out
@@ -64,6 +63,15 @@ export function layoutTree(tree: VersionTree): TreeLayout {
   const empty: TreeLayout = { pos: new Map(), width: 0, height: 0, ground: 0, edges: [], trunkWidth: 0, rows: [] }
   if (!tree.root) return empty
 
+  // Versions built on each version, counted once up front.
+  const size = new Map<number, number>()
+  const count = (node: VersionNode): number => {
+    const n = tree.children(node.version).reduce((sum, k) => sum + 1 + count(k), 0)
+    size.set(node.version, n)
+    return n
+  }
+  count(tree.root)
+
   const across = new Map<number, number>()
   const depth = new Map<number, number>()
   const shift = (version: number, dx: number) => {
@@ -73,7 +81,7 @@ export function layoutTree(tree: VersionTree): TreeLayout {
   // Returns the right edge of the subtree, starting at `cursor`.
   const walk = (node: VersionNode, d: number, cursor: number): number => {
     depth.set(node.version, d)
-    const kids = trunkOrder(tree, tree.children(node.version))
+    const kids = trunkOrder(tree.children(node.version), size)
     if (!kids.length) {
       across.set(node.version, cursor + SLOT / 2)
       return cursor + SLOT
@@ -104,10 +112,9 @@ export function layoutTree(tree: VersionTree): TreeLayout {
     const p = tree.parentOf(node.version)
     if (p === null) continue
     edges.push({
-      from: p,
       to: node.version,
       d: organic(pos.get(p)!, pos.get(node.version)!),
-      width: branchWidth(descendantCount(tree, node.version)),
+      width: branchWidth(size.get(node.version)!),
     })
   }
 
@@ -121,7 +128,7 @@ export function layoutTree(tree: VersionTree): TreeLayout {
     height: rootPos.y + PAD_BOTTOM,
     ground,
     edges,
-    trunkWidth: branchWidth(descendantCount(tree, tree.root.version)),
+    trunkWidth: branchWidth(size.get(tree.root.version)!),
     rows,
   }
 }
