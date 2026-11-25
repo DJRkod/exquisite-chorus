@@ -1,6 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 import { envelope, fakeApi, sentBody } from '../test/fakeApi.ts'
-import { ApiError, getHealth, getMe, request, signIn, signOut, signUp } from './client.ts'
+import {
+  ApiError,
+  approveVersion,
+  getHealth,
+  getMe,
+  getProject,
+  listVersions,
+  request,
+  signIn,
+  signOut,
+  signUp,
+  unapproveVersion,
+} from './client.ts'
 
 const USER = { id: 'u1', email: 'ada@example.com', displayName: 'Ada' }
 
@@ -115,5 +127,41 @@ describe('request', () => {
 
     await expect(signUp(input)).resolves.toEqual(USER)
     expect(sentBody(fetch, 'POST /api/auth/signup')).toEqual(input)
+  })
+})
+
+describe('projects', () => {
+  it('encodes the project id in the path', async () => {
+    const { fetch } = fakeApi({ 'GET /api/projects/a%2Fb': envelope(200, 'OK', { id: 'a/b' }) })
+
+    await expect(getProject('a/b')).resolves.toEqual({ id: 'a/b' })
+    expect(String(fetch.mock.calls[0][0])).toBe('/api/projects/a%2Fb')
+  })
+
+  it('lists versions from the contributions route', async () => {
+    fakeApi({ 'GET /api/projects/p1/contributions': envelope(200, 'OK', [{ version: 1 }]) })
+
+    await expect(listVersions('p1')).resolves.toEqual([{ version: 1 }])
+  })
+
+  it('approves with PUT and unapproves with DELETE on the version', async () => {
+    const { fetch } = fakeApi({
+      'PUT /api/projects/p1/contributions/3/approval': { status: 204 },
+      'DELETE /api/projects/p1/contributions/3/approval': { status: 204 },
+    })
+
+    await approveVersion('p1', 3)
+    await unapproveVersion('p1', 3)
+    expect(fetch.mock.calls.map(([url, init]) => `${init?.method} ${String(url)}`)).toEqual([
+      'PUT /api/projects/p1/contributions/3/approval',
+      'DELETE /api/projects/p1/contributions/3/approval',
+    ])
+  })
+
+  it('rejects an unknown project with a 404 ApiError', async () => {
+    fakeApi({ 'GET /api/projects/nope': envelope(404, 'Project not found') })
+
+    const err = await caught(getProject('nope'))
+    expect(err.status).toBe(404)
   })
 })

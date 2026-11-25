@@ -1,12 +1,14 @@
 // Typed fetch wrapper for the same-origin API (KTD2). Every response body is
 // the server's { message, data } envelope; success resolves to data, failure
 // rejects with an ApiError.
+import type { VersionNode } from '../projects/types.ts'
 import type {
   ApiEnvelope,
   ConfirmUploadRequest,
   CreateUploadRequest,
   CreateUploadResponse,
   PlaybackUrlResponse,
+  ProjectDto,
   PublicUser,
   RecordingDto,
   SignInRequest,
@@ -100,3 +102,13 @@ export const createUpload = (input: CreateUploadRequest) =>
 export const confirmUpload = (id: string, input: ConfirmUploadRequest) =>
   request<RecordingDto>('POST', `${recordingPath(id)}/confirm`, input)
 export const getPlaybackUrl = (id: string) => request<PlaybackUrlResponse>('GET', `${recordingPath(id)}/playback-url`)
+
+// Projects. The server routes are not built yet; these follow the paths
+// shared/src/projects.ts anticipates, plus a proposed approval route.
+const projectPath = (id: string) => `/api/projects/${encodeURIComponent(id)}`
+const approvalPath = (id: string, version: number) => `${projectPath(id)}/contributions/${version}/approval`
+
+export const getProject = (id: string) => request<ProjectDto>('GET', projectPath(id))
+export const listVersions = (id: string) => request<VersionNode[]>('GET', `${projectPath(id)}/contributions`)
+export const approveVersion = (id: string, version: number) => request<void>('PUT', approvalPath(id, version))
+export const unapproveVersion = (id: string, version: number) => request<void>('DELETE', approvalPath(id, version))
