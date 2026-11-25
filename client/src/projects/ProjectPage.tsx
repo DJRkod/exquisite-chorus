@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ApiError } from '../api/client.ts'
 import { errorMessage } from '../auth/errorMessage.ts'
-import { playTrack } from '../recordings/playback.ts'
+import { isUnlockClip, playTrack } from '../recordings/playback.ts'
 import { layoutTree } from './treeLayout.ts'
 import type { ProjectData, ProjectSource, VersionNode } from './types.ts'
 import VersionCard, { type PlayState } from './VersionCard.tsx'
@@ -175,6 +175,7 @@ export default function ProjectPage({ source }: { source: ProjectSource }) {
       return
     }
     const recordingId = node.recordingId
+    playCtl.current?.abort()
     const ctl = new AbortController()
     playCtl.current = ctl
     setPlayState('loading')
@@ -284,7 +285,14 @@ export default function ProjectPage({ source }: { source: ProjectSource }) {
         <p className="pp-empty">No versions yet.</p>
       )}
 
-      <audio ref={audioRef} onEnded={() => setPlayState('idle')} hidden />
+      <audio
+        ref={audioRef}
+        onEnded={(event) => {
+          // The Safari unlock's silent clip ends too; that is not the recording.
+          if (!isUnlockClip(event.currentTarget)) setPlayState('idle')
+        }}
+        hidden
+      />
       <p className="visually-hidden" aria-live="polite">
         {announce}
       </p>

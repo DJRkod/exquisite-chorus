@@ -4,7 +4,7 @@
 // node's largest branch is kept in the middle so the tree grows a trunk.
 // Pure math with fixed sizes, so it needs no DOM measurement.
 import type { VersionNode } from './types.ts'
-import type { VersionTree } from './versionTree.ts'
+import { descendantCounts, type VersionTree } from './versionTree.ts'
 
 /** Smallest tap area per dot; slots are wider, so neighbours never overlap. */
 export const HIT = 44
@@ -63,14 +63,7 @@ export function layoutTree(tree: VersionTree): TreeLayout {
   const empty: TreeLayout = { pos: new Map(), width: 0, height: 0, ground: 0, edges: [], trunkWidth: 0, rows: [] }
   if (!tree.root) return empty
 
-  // Versions built on each version, counted once up front.
-  const size = new Map<number, number>()
-  const count = (node: VersionNode): number => {
-    const n = tree.children(node.version).reduce((sum, k) => sum + 1 + count(k), 0)
-    size.set(node.version, n)
-    return n
-  }
-  count(tree.root)
+  const size = descendantCounts(tree)
 
   const across = new Map<number, number>()
   const depth = new Map<number, number>()

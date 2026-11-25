@@ -38,6 +38,7 @@ export default function VersionTree({ tree, layout, open, lineage, ownerName, on
   const dots = useRef(new Map<number, HTMLButtonElement>())
   const cardBox = useRef<HTMLDivElement>(null)
   const below = useRef<HTMLDivElement>(null)
+  const pane = useRef<HTMLDivElement>(null)
   const rootV = tree.root!.version
   const onLineage = useMemo(() => new Set(lineage), [lineage])
 
@@ -47,11 +48,24 @@ export default function VersionTree({ tree, layout, open, lineage, ownerName, on
     setFocusV(open)
   }
 
-  // Bring the open dot into view, and on narrow screens the card too.
+  // Bring the open dot into view, and after a selection on narrow screens the
+  // card too. The first run only scrolls the tree pane, so the page itself
+  // stays at the top on load.
+  const shownOpen = useRef<number | null>(null)
   useEffect(() => {
-    dots.current.get(open)?.scrollIntoView?.({ block: 'nearest', inline: 'center' })
-    if (!wide) below.current?.scrollIntoView?.({ block: 'nearest' })
-  }, [open, wide])
+    if (shownOpen.current === null) {
+      const p = layout.pos.get(open)
+      const paneEl = pane.current
+      if (p && paneEl) {
+        paneEl.scrollLeft = p.x - paneEl.clientWidth / 2
+        paneEl.scrollTop = p.y - paneEl.clientHeight / 2
+      }
+    } else if (shownOpen.current !== open) {
+      dots.current.get(open)?.scrollIntoView?.({ block: 'nearest', inline: 'center' })
+      if (!wide) below.current?.scrollIntoView?.({ block: 'nearest' })
+    }
+    shownOpen.current = open
+  }, [open, wide, layout])
 
   // The floating card's height decides where it sits next to its dot.
   useLayoutEffect(() => {
@@ -116,7 +130,7 @@ export default function VersionTree({ tree, layout, open, lineage, ownerName, on
       {listView ? (
         <VersionList tree={tree} version={rootV} open={open} onSelect={onSelect} />
       ) : (
-        <div className="vt-pane">
+        <div ref={pane} className="vt-pane">
           <div className="vt-stage" style={{ width: stageW, height: stageH }}>
             <svg className="vt-svg" width={stageW} height={stageH} aria-hidden="true">
               <line x1={20} x2={layout.width - 20} y1={layout.ground} y2={layout.ground} className="vt-ground" />

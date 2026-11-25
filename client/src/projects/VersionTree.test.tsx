@@ -94,6 +94,21 @@ describe('VersionTree', () => {
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
   })
 
+  it('leaves the page where it is on first load and scrolls to the card after a selection', () => {
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true })
+    try {
+      const props = { tree, layout, ownerName: 'Maya Okafor', onSelect: vi.fn(), card: <p>the card</p>, wide: false }
+      const { rerender } = render(<VersionTree {...props} open={6} lineage={lineage(tree, 6)} />)
+      expect(scrollIntoView).not.toHaveBeenCalled()
+      rerender(<VersionTree {...props} open={9} lineage={lineage(tree, 9)} />)
+      const scrolled = scrollIntoView.mock.contexts as Element[]
+      expect(scrolled).toContain(screen.getByText('the card').parentElement)
+    } finally {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+    }
+  })
+
   it('offers a list view that opens versions too', async () => {
     const user = userEvent.setup()
     const onSelect = renderTree(6)

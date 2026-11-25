@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { VersionNode } from './types.ts'
-import { buildTree, defaultVersion, descendantCount, lineage } from './versionTree.ts'
+import { buildTree, defaultVersion, descendantCounts, lineage } from './versionTree.ts'
 
 let day = 0
 function v(version: number, extra: Partial<VersionNode> = {}): VersionNode {
@@ -105,8 +105,8 @@ describe('lineage and descendants', () => {
   })
 
   it('counts everything built on a version', () => {
-    expect(descendantCount(tree, 1)).toBe(4)
-    expect(descendantCount(tree, 2)).toBe(2)
-    expect(descendantCount(tree, 7)).toBe(0)
+    expect(descendantCounts(tree).get(1)).toBe(4)
+    expect(descendantCounts(tree).get(2)).toBe(2)
+    expect(descendantCounts(tree).get(7)).toBe(0)
   })
 })

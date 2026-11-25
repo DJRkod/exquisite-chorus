@@ -74,7 +74,14 @@ export function lineage(tree: VersionTree, version: number): number[] {
   return out
 }
 
-/** How many versions are built on this one, directly or further up. */
-export function descendantCount(tree: VersionTree, version: number): number {
-  return tree.children(version).reduce((sum, child) => sum + 1 + descendantCount(tree, child.version), 0)
+/** For every version, how many versions are built on it, directly or further up. */
+export function descendantCounts(tree: VersionTree): Map<number, number> {
+  const counts = new Map<number, number>()
+  const count = (version: number): number => {
+    const n = tree.children(version).reduce((sum, child) => sum + 1 + count(child.version), 0)
+    counts.set(version, n)
+    return n
+  }
+  if (tree.root) count(tree.root.version)
+  return counts
 }

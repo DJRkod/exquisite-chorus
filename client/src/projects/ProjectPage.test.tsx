@@ -1,7 +1,8 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
-import { envelope, type Routes } from '../test/fakeApi.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { envelope, type Reply, type Routes } from '../test/fakeApi.ts'
+import { installMedia } from '../test/fakeMedia.ts'
 import { renderApp } from '../test/renderApp.tsx'
 
 const MAYA = { id: 'u-maya', email: 'maya@example.com', displayName: 'Maya Okafor', skills: [] }
@@ -154,23 +155,108 @@ describe('ProjectPage', () => {
     expect(within(await card()).getByText(/You'd be building on v9/)).toBeInTheDocument()
   })
 
+})
+
+describe('ProjectPage recordings', () => {
+  // v9 and v5 have recordings; the rest don't.
+  const WITH_RECORDINGS = VERSIONS.map((v) =>
+    v.version === 9 || v.version === 5 ? { ...v, recordingId: `r${v.version}` } : v,
+  )
+  const URL_OK = (n: number) => envelope(200, 'OK', { url: `https://s3/r${n}`, expiresAt: 'x' })
+  let media: ReturnType<typeof installMedia>
+
+  beforeEach(() => {
+    media = installMedia()
+  })
+  afterEach(() => media.restore())
+
+  function recPage(routes: Routes = {}) {
+    return page('/projects/p1', {
+      'GET /api/projects/p1/contributions': envelope(200, 'OK', WITH_RECORDINGS),
+      'GET /api/recordings/r9/playback-url': URL_OK(9),
+      'GET /api/recordings/r5/playback-url': URL_OK(5),
+      'GET https://s3/r9': { status: 200, body: 'bytes' },
+      ...routes,
+    })
+  }
+
+  it('plays the open version and stops when another version opens', async () => {
+    const user = userEvent.setup()
+    recPage()
+    await card()
+    await user.click(screen.getByRole('button', { name: 'Play v9' }))
+    expect(await screen.findByRole('button', { name: 'Pause v9' })).toBeInTheDocument()
+
+    media.pause.mockClear()
+    await user.click(screen.getByRole('button', { name: /^v5 by Player 5/ }))
+    expect(await screen.findByRole('button', { name: 'Play v5' })).toBeEnabled()
+    expect(media.pause).toHaveBeenCalled()
+  })
+
+  it('pauses on a second click', async () => {
+    const user = userEvent.setup()
+    recPage()
+    await card()
+    await user.click(screen.getByRole('button', { name: 'Play v9' }))
+    await user.click(await screen.findByRole('button', { name: 'Pause v9' }))
+    expect(await screen.findByRole('button', { name: 'Play v9' })).toBeEnabled()
+  })
+
+  it('ignores the silent unlock clip ending while the recording loads', async () => {
+    const user = userEvent.setup()
+    let answer: (reply: Reply) => void = () => {}
+    recPage({ 'GET /api/recordings/r9/playback-url': () => new Promise<Reply>((resolve) => (answer = resolve)) })
+    await card()
+    await user.click(screen.getByRole('button', { name: 'Play v9' }))
+    const audio = document.querySelector('audio')!
+    expect(audio.src).toMatch(/^blob:/)
+    act(() => {
+      audio.dispatchEvent(new Event('ended'))
+    })
+    expect(screen.getByRole('button', { name: 'Loading…' })).toBeInTheDocument()
+    answer(URL_OK(9))
+    expect(await screen.findByRole('button', { name: 'Pause v9' })).toBeInTheDocument()
+  })
+
+  it('says when a version cannot play', async () => {
+    const user = userEvent.setup()
+    recPage({ 'GET /api/recordings/r9/playback-url': envelope(500, 'Server error') })
+    await card()
+    await user.click(screen.getByRole('button', { name: 'Play v9' }))
+    expect(await within(await card()).findByText("Couldn't play v9.")).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Play v9' })).toBeEnabled()
+  })
+
   it('downloads a version by fetching its recording', async () => {
     const user = userEvent.setup()
-    const withRec = VERSIONS.map((v) => (v.version === 9 ? { ...v, recordingId: 'r9' } : v))
-    const createObjectURL = vi.fn(() => 'blob:x')
-    const revokeObjectURL = vi.fn()
-    Object.assign(URL, { createObjectURL, revokeObjectURL })
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    const { fetch } = page('/projects/p1', {
-      'GET /api/projects/p1/contributions': envelope(200, 'OK', withRec),
-      'GET /api/recordings/r9/playback-url': envelope(200, 'OK', { url: 'https://s3/r9', expiresAt: 'x' }),
-      'GET https://s3/r9': { status: 200, body: 'bytes' },
-    })
+    const { fetch } = recPage()
     await card()
     await user.click(screen.getByRole('button', { name: 'Download' }))
     await waitFor(() => expect(click).toHaveBeenCalled())
+    const saved = click.mock.contexts[0] as HTMLAnchorElement
+    expect(saved.download).toBe('Porch Song v9')
     expect(fetch.mock.calls.map(([url]) => String(url))).toContain('https://s3/r9')
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:x')
+    expect(media.revokeObjectURL).toHaveBeenCalledWith(saved.href)
+  })
+
+  it('opens the recording in a new tab when the file cannot be fetched', async () => {
+    const user = userEvent.setup()
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    recPage({ 'GET https://s3/r9': { status: 403, body: 'denied' } })
+    await card()
+    await user.click(screen.getByRole('button', { name: 'Download' }))
+    await waitFor(() => expect(open).toHaveBeenCalledWith('https://s3/r9', '_blank', 'noopener'))
+    expect(screen.getByRole('button', { name: 'Download' })).toBeEnabled()
+  })
+
+  it('says when a download cannot start', async () => {
+    const user = userEvent.setup()
+    recPage({ 'GET /api/recordings/r9/playback-url': envelope(500, 'Server error') })
+    await card()
+    await user.click(screen.getByRole('button', { name: 'Download' }))
+    expect(await within(await card()).findByText("Couldn't download v9.")).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Download' })).toBeEnabled()
   })
 })
 
