@@ -5,7 +5,7 @@ This is the server contract for the project, feed and contribution screens. All 
 ## Common conventions
 
 - Use JSON for API request bodies and the `ec.sid` session cookie (the browser handles the cookie; use same-origin credentials). Signup and login establish a session. The server rejects disallowed origins on writes.
-- Except for logout (204 with no body), responses use `{ "message": "...", "data": ... }`. Errors use the same envelope with `data: null`. The client helper unwraps successful `data` and throws an `ApiError` for failures.
+- Except for logout and version approval/unapproval (204 with no body), responses use `{ "message": "...", "data": ... }`. Errors use the same envelope with `data: null`. The client helper unwraps successful `data` and throws an `ApiError` for failures.
 - IDs are strings containing 24 hexadecimal characters. Dates are ISO 8601 strings. Missing optional metadata is returned as `null`; names may be omitted if the related user is unavailable.
 - `GET /api/health` and `GET /api/tags` are public. Project and recording routes require login.
 
@@ -29,6 +29,8 @@ This is the server contract for the project, feed and contribution screens. All 
 | PATCH `/api/projects/:id` | `UpdateProjectRequest` (owner only) | 200, `ProjectDto` |
 | GET `/api/projects/:id/contributions` | Project ID | 200, `ContributionDto[]`, newest first |
 | POST `/api/projects/:id/contributions` | `CreateContributionRequest` | 201, `ContributionDto` |
+| PUT `/api/projects/:id/contributions/:version/approval` | No body, owner only | 204, empty |
+| DELETE `/api/projects/:id/contributions/:version/approval` | No body, owner only | 204, empty |
 
 ### Authentication and picker options
 
@@ -83,7 +85,7 @@ Required: title (1–140 characters) and at least one valid skill in `needs`. Op
 
 ### Open a project and show version history
 
-Fetch `GET /api/projects/:id` for the metadata, and `GET /api/projects/:id/contributions` for the versions. `ContributionDto` includes `id`, `projectId`, `contributorId`, optional `contributorDisplayName`, `version`, `note`, `recordingId`, `createdAt`. History is newest first. Use each non-null `recordingId` to request a playback URL; note-only versions do not have audio. For the latest playable mix, find the newest version with a non-null recording ID.
+Fetch `GET /api/projects/:id` for the metadata, and `GET /api/projects/:id/contributions` for the versions. `ContributionDto` includes `id`, `projectId`, `contributorId`, optional `contributorDisplayName`, `version`, `note`, `recordingId`, `createdAt`, and optional `parentVersion`, `approved`, `skillsAdded`. History is newest numbered version first. Version 1 has a null parent; each later version references an older version of the same project. Legacy entries without metadata may be treated as linear (`version - 1`), unapproved, with no skills recorded. `currentVersion` is the highest published version number, not a canonical or approved mix. The version tree may open on the newest approved version or the original if none are approved. Use each selected version’s non-null `recordingId` for playback or download; note-only versions do not have audio.
 
 ### Submit a contribution
 
@@ -94,11 +96,16 @@ Fetch `GET /api/projects/:id` for the metadata, and `GET /api/projects/:id/contr
   "recordingId": "<new confirmed recording id>",
   "note": "Added drums",
   "baseVersion": 1,
+  "skillsAdded": ["Drums"],
   "needs": ["Bass"]
 }
 ```
 
-Supply the version the musician actually listened to as `baseVersion` (positive integer). The server rejects stale versions with 409; refresh project and history before asking the musician to resubmit. Supply a new confirmed recording and/or a note (up to 500 characters). Omit `needs` to preserve the old list, or send a nonempty skill list to request the next contribution. Successful submission increments `currentVersion`; reload the project and feed. The normal musical flow should supply the amended audio; the API also accepts note-only contributions for lyrics.
+Supply the version the musician actually listened to as `baseVersion` (positive integer). Any existing published version in this project can be the parent, including an older one. A nonexistent parent returns 404; if omitted, the latest published version is used. Supply a new confirmed recording and/or a note (up to 500 characters). `skillsAdded` is optional and accepts a possibly empty array of vocabulary skills; duplicates are removed. New versions are unapproved, and the server assigns their version number and parent. Omit `needs` to preserve the project-wide list, or send a nonempty skill list to update it (not branch-specific). Successful submission increments `currentVersion`; reload the project and feed. Concurrent submissions may return 409; refresh and retry with the same chosen parent if it still exists. The normal musical flow should supply the amended audio; the API also accepts note-only contributions for lyrics.
+
+### Approve or unapprove a version
+
+Send `PUT /api/projects/:id/contributions/:version/approval` to approve and `DELETE` to unapprove, with no request body. `:version` is the positive integer version number, not a contribution ID. Both return 204 with an empty body and are idempotent. Only the project owner may change approval (403 for other signed-in users). Multiple versions may be approved at once, including the original; approvals can also change on closed projects. All signed-in viewers can read approval flags in history. Approving a version does not change the currently selected version, remove other approvals, or update the highest published version number.
 
 ### Edit, close or reopen
 
@@ -111,8 +118,8 @@ Supply the version the musician actually listened to as `baseVersion` (positive 
 | 400 | Display the server message and correct invalid fields or query parameters |
 | 401 | Prompt for sign-in |
 | 403 | Show permission denied (owner-only edits or disallowed origin) |
-| 404 | Show missing project/recording; a recording not owned by the submitter also returns 404 on attachment |
-| 409 | Refresh stale project data, confirm unfinished uploads, or report a recording already attached/closed project; duplicate records may also return this status |
+| 404 | Show missing project/recording/version; a recording not owned by the submitter also returns 404 on attachment |
+| 409 | Refresh after a concurrent write, confirm unfinished uploads, or report a recording already attached/closed project; duplicate records may also return this status |
 | 415 | Send JSON for API writes |
 | 422 | Recording upload rejected |
 | 429 | Wait before retrying signup or login |

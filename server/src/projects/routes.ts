@@ -95,11 +95,20 @@ function parseContribution(body: unknown): CreateContributionRequest {
     throw new HttpError(400, 'baseVersion must be a positive whole number')
   }
   const rawNeeds = field(body, 'needs')
+  const rawSkillsAdded = field(body, 'skillsAdded')
+  let skillsAdded: Skill[] | undefined
+  if (rawSkillsAdded !== undefined) {
+    if (!Array.isArray(rawSkillsAdded) || rawSkillsAdded.some((skill) => typeof skill !== 'string' || !(SKILLS as readonly string[]).includes(skill))) {
+      throw new HttpError(400, 'skillsAdded must be an array of skills from the skill picker')
+    }
+    skillsAdded = [...new Set(rawSkillsAdded)] as Skill[]
+  }
   return {
     ...(note ? { note } : {}),
     ...(recordingId === undefined ? {} : { recordingId }),
     ...(baseVersion === undefined ? {} : { baseVersion: baseVersion as number }),
     ...(rawNeeds === undefined ? {} : { needs: parseNeeds(rawNeeds) }),
+    ...(skillsAdded === undefined ? {} : { skillsAdded }),
   }
 }
 
@@ -167,6 +176,24 @@ function projectId(raw: string | string[] | undefined): Types.ObjectId {
   return new Types.ObjectId(raw)
 }
 
+function versionNumber(raw: string | string[] | undefined): number {
+  if (typeof raw !== 'string' || !/^[1-9]\d*$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+    throw new HttpError(400, 'Invalid version number')
+  }
+  return Number(raw)
+}
+
+// Approvals belong to individual published versions, not to the whole project.
+async function setVersionApproval(id: Types.ObjectId, version: number, owner: Types.ObjectId, approved: boolean): Promise<void> {
+  const project = await Project.findById(id, { owner: 1, currentVersion: 1 }).lean()
+  if (!project) throw new HttpError(404, 'Project not found')
+  if (!project.owner.equals(owner)) throw new HttpError(403, 'Only the project owner can approve versions')
+  if (version > project.currentVersion) throw new HttpError(404, 'Version not found')
+  const result = await Contribution.updateOne({ project: id, version }, { $set: { approved } }, { runValidators: true })
+  // An identical repeated request is a success, not a missing version.
+  if (result.matchedCount !== 1) throw new HttpError(404, 'Version not found')
+}
+
 export function projectsRouter(): Router {
   const router = Router()
   router.use('/projects', requireAuth)
@@ -190,6 +217,9 @@ export function projectsRouter(): Router {
         project: project._id,
         contributor: owner,
         version: 1,
+        parentVersion: null,
+        approved: false,
+        skillsAdded: [],
         note: ORIGINAL_TRACK_NOTE,
         ...(recording ? { recording } : {}),
       })
@@ -294,8 +324,11 @@ export function projectsRouter(): Router {
     const project = await Project.findById(id).lean()
     if (!project) throw new HttpError(404, 'Project not found')
     if (project.status !== 'open') throw new HttpError(409, 'This project is closed')
-    if (input.baseVersion !== undefined && input.baseVersion !== project.currentVersion) {
-      throw new HttpError(409, 'A newer version is available; refresh the project before contributing')
+    // A contribution can branch from any published version of this project.
+    // Omitted baseVersion preserves the existing default (latest numbered mix).
+    const parentVersion = input.baseVersion ?? project.currentVersion
+    if (parentVersion > project.currentVersion || !(await Contribution.exists({ project: id, version: parentVersion }))) {
+      throw new HttpError(404, 'Base version not found')
     }
 
     // The unique project/version index prevents simultaneous submissions from
@@ -305,6 +338,9 @@ export function projectsRouter(): Router {
       project: id,
       contributor,
       version: project.currentVersion + 1,
+      parentVersion,
+      approved: false,
+      skillsAdded: input.skillsAdded ?? [],
       ...(input.note ? { note: input.note } : {}),
     })
     let recording: Types.ObjectId | undefined
@@ -328,6 +364,16 @@ export function projectsRouter(): Router {
       throw err
     }
     respond<ContributionDto>(res, 201, 'Contribution created', toContributionDto(contribution, req.user!.displayName))
+  })
+
+  router.put('/projects/:id/contributions/:version/approval', async (req, res) => {
+    await setVersionApproval(projectId(req.params.id), versionNumber(req.params.version), req.user!._id, true)
+    res.status(204).end()
+  })
+
+  router.delete('/projects/:id/contributions/:version/approval', async (req, res) => {
+    await setVersionApproval(projectId(req.params.id), versionNumber(req.params.version), req.user!._id, false)
+    res.status(204).end()
   })
 
   return router

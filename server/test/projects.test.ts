@@ -199,7 +199,7 @@ describe('original audio attachment', () => {
     const id = res.body.data.id as string
     const history = await agent.get(`/api/projects/${id}/contributions`).expect(200)
     expect(history.body.data).toHaveLength(1)
-    expect(history.body.data[0]).toMatchObject({ version: 1, recordingId: rec.id, contributorDisplayName: 'Alice' })
+    expect(history.body.data[0]).toMatchObject({ version: 1, parentVersion: null, approved: false, skillsAdded: [], recordingId: rec.id, contributorDisplayName: 'Alice' })
     expect(history.body.data[0]).not.toHaveProperty('key')
     expect(String((await Recording.findById(rec.id))?.project)).toBe(id)
     await agent.post('/api/projects').send({ ...validProject, recordingId: rec.id }).expect(409)
@@ -237,7 +237,7 @@ describe('project contributions', () => {
     expect(history.body.data.map((v: {recordingId: string}) => v.recordingId)).toEqual([mix.id, original.id])
     expect(String((await Recording.findById(mix.id))?.project)).toBe(id)
     await contributor.post(path).send({ recordingId: mix.id, baseVersion: 2 }).expect(409)
-    await contributor.post(path).send({ note: 'Stale', baseVersion: 1 }).expect(409)
+    await contributor.post(path).send({ note: 'Missing parent', baseVersion: 99 }).expect(404)
     expect(await Contribution.countDocuments()).toBe(2)
   })
 
@@ -274,7 +274,7 @@ describe('project contributions', () => {
     expect(await Contribution.countDocuments()).toBe(1)
   })
 
-  it('rejects competing mixes based on the same version', async () => {
+  it('keeps version numbers unique for simultaneous branches and permits a conflicted submission to retry', async () => {
     const owner = await signedIn()
     const contributor = await signedIn(bob)
     const project = await owner.post('/api/projects').send(validProject).expect(201)
@@ -286,10 +286,22 @@ describe('project contributions', () => {
       contributor.post(path).send({ recordingId: a.id, baseVersion: 1 }),
       contributor.post(path).send({ recordingId: b.id, baseVersion: 1 }),
     ])
-    expect(results.map((r) => r.status).sort()).toEqual([201, 409])
-    expect((await Project.findById(id))?.currentVersion).toBe(2)
-    expect(await Contribution.countDocuments({ project: id })).toBe(2)
-    expect(await Recording.countDocuments({ project: id })).toBe(1)
+    // Either both requests serialize successfully or one sees a version-number
+    // conflict. A retry still branches from v1, rather than changing its parent.
+    expect(results.map((r) => r.status)).toContain(201)
+    const recordings = [a, b]
+    for (const [index, result] of results.entries()) {
+      if (result.status === 409) {
+        await contributor.post(path).send({ recordingId: recordings[index].id, baseVersion: 1 }).expect(201)
+      } else {
+        expect(result.status).toBe(201)
+      }
+    }
+    expect((await Project.findById(id))?.currentVersion).toBe(3)
+    const versions = await Contribution.find({ project: id }).sort({ version: 1 }).lean()
+    expect(versions.map((v) => v.version)).toEqual([1, 2, 3])
+    expect(versions.slice(1).map((v) => v.parentVersion)).toEqual([1, 1])
+    expect(await Recording.countDocuments({ project: id })).toBe(2)
   })
 })
 
@@ -372,5 +384,85 @@ describe('PATCH /api/projects/:id', () => {
     await owner.patch(path).send({ status: 'open' }).expect(200)
     await other.post(`${path}/contributions`).send({ note: 'New mix' }).expect(201)
     expect((await other.get('/api/projects').expect(200)).body.data[0].currentVersion).toBe(2)
+  })
+})
+
+
+describe('branching history and version approvals', () => {
+  it('branches from older versions, records added skills and uses the latest version if no parent is specified', async () => {
+    const owner = await signedIn()
+    const contributor = await signedIn(bob)
+    const id = (await owner.post('/api/projects').send(validProject).expect(201)).body.data.id as string
+    const path = `/api/projects/${id}/contributions`
+    const first = await contributor.post(path).send({ note: 'Drums', baseVersion: 1, skillsAdded: ['Drums', 'Drums'], needs: ['Bass'] }).expect(201)
+    expect(first.body.data).toMatchObject({ version: 2, parentVersion: 1, skillsAdded: ['Drums'], approved: false })
+    const second = await owner.post(path).send({ note: 'Alternative guitar', baseVersion: 1, skillsAdded: ['Guitar'], approved: true, parentVersion: 99 }).expect(201)
+    expect(second.body.data).toMatchObject({ version: 3, parentVersion: 1, skillsAdded: ['Guitar'], approved: false })
+    const third = await contributor.post(path).send({ note: 'Alternate drums', baseVersion: 2 }).expect(201)
+    expect(third.body.data).toMatchObject({ version: 4, parentVersion: 2, skillsAdded: [], approved: false })
+    await contributor.post(path).send({ note: 'Latest mix', skillsAdded: [] }).expect(201)
+    expect((await owner.get(path).expect(200)).body.data).toMatchObject([
+      { version: 5, parentVersion: 4 }, { version: 4, parentVersion: 2 },
+      { version: 3, parentVersion: 1 }, { version: 2, parentVersion: 1 }, { version: 1, parentVersion: null },
+    ])
+    expect((await owner.get(`/api/projects/${id}`).expect(200)).body.data).toMatchObject({ currentVersion: 5, needs: ['Bass'] })
+  })
+
+  it('rejects malformed or nonexistent parents and invalid skills without claiming audio', async () => {
+    const owner = await signedIn()
+    const id = (await owner.post('/api/projects').send(validProject).expect(201)).body.data.id as string
+    const path = `/api/projects/${id}/contributions`
+    const recording = await recordingFor(alice.email)
+    await owner.post(path).send({ recordingId: recording.id, baseVersion: 1.5 }).expect(400)
+    await owner.post(path).send({ recordingId: recording.id, baseVersion: 2 }).expect(404)
+    await owner.post(path).send({ recordingId: recording.id, skillsAdded: 'Drums' }).expect(400)
+    await owner.post(path).send({ recordingId: recording.id, skillsAdded: ['Triangle'] }).expect(400)
+    expect((await Recording.findById(recording.id))?.project).toBeUndefined()
+    expect(await Contribution.countDocuments({ project: id })).toBe(1)
+  })
+
+  it('persists multiple independent approvals, and repeated approve/unapprove calls are idempotent', async () => {
+    const owner = await signedIn()
+    const contributor = await signedIn(bob)
+    const id = (await owner.post('/api/projects').send(validProject).expect(201)).body.data.id as string
+    const path = `/api/projects/${id}/contributions`
+    await contributor.post(path).send({ note: 'Version 2', baseVersion: 1 }).expect(201)
+    await contributor.post(path).send({ note: 'Version 3', baseVersion: 1 }).expect(201)
+    const approval = (version: number) => `${path}/${version}/approval`
+    expect((await owner.put(approval(2)).expect(204)).text).toBe('')
+    await owner.put(approval(2)).expect(204)
+    await owner.put(approval(3)).expect(204)
+    expect((await contributor.get(path).expect(200)).body.data).toMatchObject([
+      { version: 3, approved: true }, { version: 2, approved: true }, { version: 1, approved: false },
+    ])
+    await owner.delete(approval(2)).expect(204)
+    await owner.delete(approval(2)).expect(204)
+    expect((await contributor.get(path).expect(200)).body.data).toMatchObject([
+      { version: 3, approved: true }, { version: 2, approved: false }, { version: 1, approved: false },
+    ])
+    expect((await owner.get(`/api/projects/${id}`).expect(200)).body.data.currentVersion).toBe(3)
+  })
+
+  it('enforces owner authorization and rejects invalid or unpublished versions', async () => {
+    const owner = await signedIn()
+    const contributor = await signedIn(bob)
+    const id = (await owner.post('/api/projects').send(validProject).expect(201)).body.data.id as string
+    const path = `/api/projects/${id}/contributions`
+    const approval = `${path}/1/approval`
+    await request(app).put(approval).expect(401)
+    await request(app).delete(approval).expect(401)
+    await contributor.put(approval).expect(403)
+    await contributor.delete(approval).expect(403)
+    await owner.put(approval).set('Origin', 'https://untrusted.example').expect(403)
+    await owner.put(`${path}/0/approval`).expect(400)
+    await owner.delete(`${path}/1.5/approval`).expect(400)
+    await owner.put(`${path}/9007199254740992/approval`).expect(400)
+    await owner.put(`${path}/2/approval`).expect(404)
+    await owner.delete('/api/projects/000000000000000000000000/contributions/1/approval').expect(404)
+    expect((await owner.get(path).expect(200)).body.data).toMatchObject([{ version: 1, approved: false }])
+    // Owners may also approve the original and approve versions of a closed project.
+    await owner.patch(`/api/projects/${id}`).send({ status: 'closed' }).expect(200)
+    await owner.put(approval).expect(204)
+    expect((await contributor.get(path).expect(200)).body.data).toMatchObject([{ version: 1, approved: true }])
   })
 })
