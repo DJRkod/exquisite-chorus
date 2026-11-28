@@ -23,6 +23,8 @@ export type {
   CreateProjectRequest,
   ProjectDto,
   ProjectStatus,
+  TagOptionsDto,
+  UpdateProjectRequest,
 } from './projects.js'
 // The vocabulary's runtime lists (SKILLS, GENRES, ...) are NOT re-exported
 // here: the root entry stays types-only. Import values from

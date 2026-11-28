@@ -14,6 +14,7 @@ import { createSessionStore, sessionMiddleware } from './auth/session.js'
 import type { Config } from './config.js'
 import { dbState } from './db.js'
 import { apiNotFound, errorHandler, respond } from './http.js'
+import { projectsRouter } from './projects/routes.js'
 import { recordingsRouter } from './recordings/routes.js'
 import { createS3Client, s3Storage } from './storage/s3.js'
 
@@ -73,6 +74,7 @@ export function createApp(config: Config, deps: AppDeps = {}): Express {
   // API: built-in routers, then extra routers.
   app.use('/api', authRouter(config, { bcryptRounds: deps.bcryptRounds }))
   app.use('/api', recordingsRouter(storage))
+  app.use('/api', projectsRouter())
   for (const router of deps.apiRouters ?? []) app.use('/api', router)
   app.use('/api', apiNotFound)
 
